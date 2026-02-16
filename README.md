@@ -157,6 +157,15 @@ require('overleaf').setup({
 
 The plugin spawns a Node.js bridge process that connects to Overleaf's real-time collaboration server via Socket.IO. Edits in Neovim are converted to OT operations and sent to the server. Remote edits from other collaborators are transformed and applied to your buffer in real-time.
 
+## Acknowledgments
+
+This project was developed with reference to the following projects for understanding Overleaf's real-time collaboration protocol:
+
+- [AirLatex.vim](https://github.com/dmadisetti/AirLatex.vim) (MIT) — Neovim plugin for Overleaf by David Hartmann. Referenced for Chrome cookie extraction approach and Socket.IO connection patterns.
+- [Overleaf-Workshop](https://github.com/iamhyc/Overleaf-Workshop) (AGPL-3.0) — VS Code extension for Overleaf. Referenced for protocol details including the v2 connection scheme, OT update hashing, and joinDoc parameters.
+
+The code in this repository is an independent implementation in Lua/Node.js. No source code was directly copied from either project.
+
 ## License
 
 MIT
