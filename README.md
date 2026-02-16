@@ -2,13 +2,14 @@
 
 Neovim plugin for real-time collaborative LaTeX editing on [Overleaf](https://www.overleaf.com).
 
-Edit your Overleaf projects directly in Neovim with full real-time collaboration support via Operational Transformation (OT).
+Edit your Overleaf projects directly in Neovim with full real-time collaboration support via Operational Transformation (OT). Use your favorite Neovim plugins — treesitter, LSP, snippets, copilot, and more — while collaborating with others on Overleaf.
 
 ## Features
 
 - **Real-time collaboration** — edits sync instantly with other Overleaf users via OT
+- **Full Neovim ecosystem** — treesitter, LSP, snippets, copilot, and all your plugins work out of the box
 - **File tree** — browse and manage project files in a sidebar
-- **Auto-authentication** — extracts session cookie from Chrome automatically
+- **Auto-authentication** — extracts session cookie from Chrome automatically (macOS)
 - **Auto-reconnect** — recovers from disconnects and document restores seamlessly
 - **Compile & PDF preview** — compile LaTeX and open the PDF
 - **Comments & reviews** — view, reply, resolve comment threads
@@ -32,9 +33,23 @@ Edit your Overleaf projects directly in Neovim with full real-time collaboration
 
 ```lua
 {
-  'your-username/overleaf.nvim',
+  'richwomanbtc/overleaf.nvim',
   config = function()
     require('overleaf').setup()
+  end,
+  build = 'cd node && npm install',
+}
+```
+
+If Node.js is not on your default PATH (e.g., installed via Homebrew on macOS):
+
+```lua
+{
+  'richwomanbtc/overleaf.nvim',
+  config = function()
+    require('overleaf').setup({
+      node_path = '/opt/homebrew/bin/node',
+    })
   end,
   build = 'cd node && npm install',
 }
@@ -43,7 +58,7 @@ Edit your Overleaf projects directly in Neovim with full real-time collaboration
 ### Manual
 
 ```sh
-git clone https://github.com/your-username/overleaf.nvim ~/.local/share/nvim/lazy/overleaf.nvim
+git clone https://github.com/richwomanbtc/overleaf.nvim ~/.local/share/nvim/lazy/overleaf.nvim
 cd ~/.local/share/nvim/lazy/overleaf.nvim/node && npm install
 ```
 
@@ -69,7 +84,7 @@ require('overleaf').setup({
 })
 ```
 
-To get the cookie manually: open overleaf.com in your browser → DevTools → Application → Cookies → copy the full `Cookie` header value.
+To get the cookie manually: open overleaf.com in your browser → DevTools (F12) → Application → Cookies → `www.overleaf.com` → find `overleaf_session2` → copy the cookie value (starts with `s%3A...`).
 
 ## Usage
 
@@ -156,6 +171,14 @@ require('overleaf').setup({
 ## How It Works
 
 The plugin spawns a Node.js bridge process that connects to Overleaf's real-time collaboration server via Socket.IO. Edits in Neovim are converted to OT operations and sent to the server. Remote edits from other collaborators are transformed and applied to your buffer in real-time.
+
+## Disclaimer
+
+This is an **unofficial** plugin and is not affiliated with, endorsed by, or supported by [Overleaf](https://www.overleaf.com). It relies on Overleaf's internal real-time collaboration protocol, which is undocumented and may change at any time without notice. Such changes could cause the plugin to stop working, or in the worst case, lead to document corruption or data loss.
+
+Overleaf maintains version history for all projects, so you can restore previous versions from the Overleaf web interface if anything goes wrong.
+
+**Use this plugin at your own risk.** Always keep important work backed up.
 
 ## Acknowledgments
 
