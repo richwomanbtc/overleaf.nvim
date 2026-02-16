@@ -104,10 +104,6 @@ function Document:flush()
       config.log('debug', 'OT update failed: %s', err.message)
       self.inflight_op = nil
       self.pending_ops = nil
-      -- Only rejoin if still connected (disconnect handler will handle reconnect)
-      if require('overleaf')._state.connected then
-        self:rejoin()
-      end
       return
     end
     self:_on_ack()

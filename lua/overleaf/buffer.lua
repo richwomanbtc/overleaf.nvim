@@ -165,11 +165,14 @@ function M.attach(bufnr, doc)
 
       local ops = {}
 
+      -- Convert byte offset to character offset for Overleaf protocol
+      local char_offset = ot.byte_to_char(doc.content, byte_offset)
+
       -- Delete operation
       if old_end_byte > 0 then
         local deleted_text = doc.content:sub(byte_offset + 1, byte_offset + old_end_byte)
         if #deleted_text > 0 then
-          table.insert(ops, { p = byte_offset, d = deleted_text })
+          table.insert(ops, { p = char_offset, d = deleted_text })
         end
       end
 
@@ -189,7 +192,7 @@ function M.attach(bufnr, doc)
         if ok and new_lines then
           local inserted_text = table.concat(new_lines, '\n')
           if #inserted_text > 0 then
-            table.insert(ops, { p = byte_offset, i = inserted_text })
+            table.insert(ops, { p = char_offset, i = inserted_text })
           end
         end
       end
@@ -222,14 +225,18 @@ function M.apply_remote(doc, ops)
         if op.d then
           local all_lines = vim.api.nvim_buf_get_lines(doc.bufnr, 0, -1, false)
           local buf_content = table.concat(all_lines, '\n')
-          local start_row, start_col = ot.byte_offset_to_pos(buf_content, op.p)
-          local end_row, end_col = ot.byte_offset_to_pos(buf_content, op.p + #op.d)
+          -- Convert character offset to byte offset for Neovim
+          local byte_p = ot.char_to_byte(buf_content, op.p)
+          local start_row, start_col = ot.byte_offset_to_pos(buf_content, byte_p)
+          local end_row, end_col = ot.byte_offset_to_pos(buf_content, byte_p + #op.d)
           vim.api.nvim_buf_set_text(doc.bufnr, start_row, start_col, end_row, end_col, { '' })
         end
         if op.i then
           local all_lines = vim.api.nvim_buf_get_lines(doc.bufnr, 0, -1, false)
           local buf_content = table.concat(all_lines, '\n')
-          local row, col = ot.byte_offset_to_pos(buf_content, op.p)
+          -- Convert character offset to byte offset for Neovim
+          local byte_p = ot.char_to_byte(buf_content, op.p)
+          local row, col = ot.byte_offset_to_pos(buf_content, byte_p)
           local insert_lines = vim.split(op.i, '\n', { plain = true })
           vim.api.nvim_buf_set_text(doc.bufnr, row, col, row, col, insert_lines)
         end

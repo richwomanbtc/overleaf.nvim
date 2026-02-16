@@ -174,12 +174,12 @@ class SocketManager {
   async joinDoc(docId) {
     // Explicitly pass fromVersion=-1 to get full document (no incremental ops)
     const data = await this._promisifiedEmit('joinDoc', docId, -1, { encodeRanges: true });
-    // data = [docLinesAscii[], version, updates, ranges]
-    const [docLinesAscii, version, updates, ranges] = data;
+    // data = [docLines[], version, updates, ranges]
+    const [docLines, version, updates, ranges] = data;
 
-    // Decode ASCII to UTF-8
-    const lines = (docLinesAscii || []).map((line) =>
-      Buffer.from(line, 'ascii').toString('utf-8')
+    // Decode Latin-1 to UTF-8 (Overleaf transmits doc lines as Latin-1 encoded)
+    const lines = (docLines || []).map((line) =>
+      Buffer.from(line, 'latin1').toString('utf-8')
     );
 
     // Decode ranges if they're encoded as a JSON string
@@ -230,7 +230,7 @@ class SocketManager {
           newContent = newContent.slice(0, o.p) + o.i + newContent.slice(o.p);
         }
       }
-      // Use string length (character count), not byte length - matches Overleaf's sharejs
+      // Use JS string length (character count) - matches Overleaf's sharejs
       update.hash = crypto
         .createHash('sha1')
         .update('blob ' + newContent.length + '\x00' + newContent)
