@@ -2,6 +2,71 @@
 
 const crypto = require('crypto');
 
+// Monkey-patch socket.io-client v0.9 to support extraHeaders in Node.js.
+// The stock v0.9 client does not send Cookie/Origin headers in its
+// handshake (xmlhttprequest blocks Cookie) or WebSocket transport.
+(function patchSocketIO() {
+  const io = require('socket.io-client');
+
+  // 1. Replace handshake to use Node.js https (bypasses xmlhttprequest)
+  io.Socket.prototype.handshake = function (fn) {
+    const self = this;
+    const options = this.options;
+    const extraHeaders = options.extraHeaders || {};
+
+    const handshakeUrl = [
+      'https:/',
+      options.host + ':' + options.port,
+      options.resource,
+      io.protocol,
+      '?t=' + Date.now(),
+    ].join('/');
+    const queryStr = options.query || '';
+    const fullUrl = queryStr ? handshakeUrl + '&' + queryStr : handshakeUrl;
+    const parsed = new (require('url').URL)(fullUrl);
+
+    const req = require('https').request({
+      hostname: parsed.hostname,
+      port: parsed.port || 443,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: Object.assign({}, extraHeaders),
+    }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          fn.apply(null, body.split(':'));
+        } else {
+          self.connecting = false;
+          self.onError(new Error('Handshake failed: ' + res.statusCode));
+        }
+      });
+    });
+    req.on('error', (err) => { self.connecting = false; self.onError(err); });
+    req.setTimeout(15000, () => req.destroy(new Error('Handshake timeout')));
+    req.end();
+  };
+
+  // 2. Replace WebSocket open to pass extraHeaders
+  io.Transport.websocket.prototype.open = function () {
+    const query = io.util.query(this.socket.options.query);
+    const WS = require('ws');
+    const wsOpts = {};
+    if (this.socket.options.extraHeaders) {
+      wsOpts.headers = this.socket.options.extraHeaders;
+    }
+    this.websocket = new WS(this.prepareUrl() + query, wsOpts);
+
+    const self = this;
+    this.websocket.onopen = function () { self.onOpen(); self.socket.setBuffer(false); };
+    this.websocket.onmessage = function (ev) { self.onData(ev.data); };
+    this.websocket.onclose = function () { self.onClose(); self.socket.setBuffer(true); };
+    this.websocket.onerror = function (e) { self.onError(e); };
+    return this;
+  };
+})();
+
 class SocketManager {
   constructor(cookie, projectId, sendEvent) {
     this.cookie = cookie;

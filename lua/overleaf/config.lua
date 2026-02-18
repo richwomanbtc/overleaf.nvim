@@ -42,7 +42,7 @@ function M.load_cookie()
     local f = io.open(path, 'r')
     if f then
       for line in f:lines() do
-        local key, value = line:match('^(%S+)=(.+)$')
+        local key, value = line:match('^([^=]+)=(.+)$')
         if key == 'OVERLEAF_COOKIE' then
           M._config.cookie = value
           f:close()

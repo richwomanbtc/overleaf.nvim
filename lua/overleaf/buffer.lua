@@ -19,6 +19,15 @@ function M.create(doc, lines)
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.bo[bufnr].modified = false
 
+  -- Clear undo history so 'u' doesn't wipe the buffer after initial load
+  local old_undolevels = vim.bo[bufnr].undolevels
+  vim.bo[bufnr].undolevels = -1
+  vim.api.nvim_buf_call(bufnr, function()
+    vim.cmd("exe 'normal a \\<BS>\\<Esc>'")
+  end)
+  vim.bo[bufnr].undolevels = old_undolevels
+  vim.bo[bufnr].modified = false
+
   doc.bufnr = bufnr
 
   -- :w clears modified flag and triggers compile (changes are already synced via OT)
