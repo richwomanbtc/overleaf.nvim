@@ -35,9 +35,7 @@ end
 local function find_bufnr(doc_id)
   local state = require('overleaf')._state
   local doc = state.documents[doc_id]
-  if doc and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-    return doc.bufnr
-  end
+  if doc and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then return doc.bufnr end
   return nil
 end
 
@@ -83,9 +81,7 @@ function M.on_client_disconnected(data)
       vim.api.nvim_buf_clear_namespace(bufnr, M._ns, 0, -1)
       -- Re-render remaining cursors on this buffer
       for uid, c in pairs(M._collaborators) do
-        if uid ~= user_id and c.doc_id == collab.doc_id then
-          M._render_cursor(uid, c)
-        end
+        if uid ~= user_id and c.doc_id == collab.doc_id then M._render_cursor(uid, c) end
       end
     end
   end

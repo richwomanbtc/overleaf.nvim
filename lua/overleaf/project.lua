@@ -5,9 +5,7 @@ local M = {}
 M._projects = {}
 M._project_tree = {} -- flat list of {id, name, path}
 
-function M.set_projects(projects)
-  M._projects = projects or {}
-end
+function M.set_projects(projects) M._projects = projects or {} end
 
 function M.select_project(callback)
   if #M._projects == 0 then
@@ -26,26 +24,18 @@ function M.select_project(callback)
 
   vim.ui.select(items, {
     prompt = 'Select Overleaf Project:',
-    format_item = function(item)
-      return item.label .. ' (' .. item.detail .. ')'
-    end,
+    format_item = function(item) return item.label .. ' (' .. item.detail .. ')' end,
   }, function(choice)
-    if choice then
-      callback(choice.id, choice.label)
-    end
+    if choice then callback(choice.id, choice.label) end
   end)
 end
 
 function M.parse_project_tree(project)
   M._project_tree = {}
-  if not project or not project.rootFolder then
-    return M._project_tree
-  end
+  if not project or not project.rootFolder then return M._project_tree end
 
   local root = project.rootFolder
-  if type(root) == 'table' and root[1] then
-    root = root[1]
-  end
+  if type(root) == 'table' and root[1] then root = root[1] end
 
   M._walk_folder(root, '')
   return M._project_tree
@@ -104,30 +94,22 @@ function M.select_document(callback)
 
   vim.ui.select(M._project_tree, {
     prompt = 'Select Document:',
-    format_item = function(item)
-      return item.path
-    end,
+    format_item = function(item) return item.path end,
   }, function(choice)
-    if choice then
-      callback(choice.id, choice.path)
-    end
+    if choice then callback(choice.id, choice.path) end
   end)
 end
 
 function M.get_doc_by_id(doc_id)
   for _, doc in ipairs(M._project_tree) do
-    if doc.id == doc_id then
-      return doc
-    end
+    if doc.id == doc_id then return doc end
   end
   return nil
 end
 
 function M.get_doc_by_path(path)
   for _, doc in ipairs(M._project_tree) do
-    if doc.path == path then
-      return doc
-    end
+    if doc.path == path then return doc end
   end
   return nil
 end
@@ -135,9 +117,7 @@ end
 --- Check if a path already exists in the tree
 function M.path_exists(path)
   for _, entry in ipairs(M._project_tree) do
-    if entry.path == path then
-      return true
-    end
+    if entry.path == path then return true end
   end
   return false
 end
@@ -207,9 +187,7 @@ end
 function M.get_folder_path(folder_id)
   if not folder_id then return '' end
   for _, entry in ipairs(M._project_tree) do
-    if entry.id == folder_id and entry.type == 'folder' then
-      return entry.path
-    end
+    if entry.id == folder_id and entry.type == 'folder' then return entry.path end
   end
   return ''
 end

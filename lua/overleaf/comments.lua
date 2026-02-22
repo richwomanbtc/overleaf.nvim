@@ -3,7 +3,7 @@ local config = require('overleaf.config')
 
 local M = {}
 
-M._threads = {}  -- threadId -> { id, messages, resolved, resolved_by }
+M._threads = {} -- threadId -> { id, messages, resolved, resolved_by }
 M._doc_comments = {} -- docId -> { { threadId, offset, length, content } }
 M._ns = vim.api.nvim_create_namespace('overleaf_comments')
 
@@ -54,8 +54,7 @@ function M.parse_ranges(doc_id, ranges)
 
   local comments = ranges.comments
   if not comments then
-    config.log('debug', 'No comments in ranges for doc %s (keys: %s)',
-      doc_id, vim.inspect(vim.tbl_keys(ranges)))
+    config.log('debug', 'No comments in ranges for doc %s (keys: %s)', doc_id, vim.inspect(vim.tbl_keys(ranges)))
     return
   end
 
@@ -66,12 +65,18 @@ function M.parse_ranges(doc_id, ranges)
     if op and op.t then
       table.insert(M._doc_comments[doc_id], {
         threadId = op.t,
-        offset = op.p or 0,    -- character offset in document
+        offset = op.p or 0, -- character offset in document
         length = op.c and #op.c or 0,
         content = op.c or '',
       })
-      config.log('debug', 'Comment: thread=%s offset=%d len=%d text="%s"',
-        op.t, op.p or 0, op.c and #op.c or 0, (op.c or ''):sub(1, 30))
+      config.log(
+        'debug',
+        'Comment: thread=%s offset=%d len=%d text="%s"',
+        op.t,
+        op.p or 0,
+        op.c and #op.c or 0,
+        (op.c or ''):sub(1, 30)
+      )
     end
   end
 end
@@ -82,9 +87,7 @@ local function offset_to_pos(content, offset)
   local col = 0
   local pos = 0
   for i = 1, #content do
-    if pos >= offset then
-      return line, col
-    end
+    if pos >= offset then return line, col end
     if content:sub(i, i) == '\n' then
       line = line + 1
       col = 0
@@ -137,33 +140,35 @@ function M.render(bufnr, doc_id, content)
       end
 
       -- Collect labels per line
-      if not line_labels[start_line] then
-        line_labels[start_line] = {}
-      end
+      if not line_labels[start_line] then line_labels[start_line] = {} end
       table.insert(line_labels[start_line], label)
 
       -- Highlight the range (each comment gets its own highlight)
-      pcall(function()
-        vim.api.nvim_buf_set_extmark(bufnr, M._ns, start_line - 1, start_col, {
-          end_row = end_line - 1,
-          end_col = end_col,
-          hl_group = 'OverleafComment',
-        })
-      end)
+      pcall(
+        function()
+          vim.api.nvim_buf_set_extmark(bufnr, M._ns, start_line - 1, start_col, {
+            end_row = end_line - 1,
+            end_col = end_col,
+            hl_group = 'OverleafComment',
+          })
+        end
+      )
     end
   end
 
   -- Second pass: add one virtual text + sign per line (combining labels)
   for line, labels in pairs(line_labels) do
     local combined = table.concat(labels, ' | ')
-    pcall(function()
-      vim.api.nvim_buf_set_extmark(bufnr, M._ns, line - 1, 0, {
-        sign_text = '',
-        sign_hl_group = 'OverleafCommentSign',
-        virt_text = { { '  ' .. combined, 'Comment' } },
-        virt_text_pos = 'eol',
-      })
-    end)
+    pcall(
+      function()
+        vim.api.nvim_buf_set_extmark(bufnr, M._ns, line - 1, 0, {
+          sign_text = '',
+          sign_hl_group = 'OverleafCommentSign',
+          virt_text = { { '  ' .. combined, 'Comment' } },
+          virt_text_pos = 'eol',
+        })
+      end
+    )
   end
 end
 
@@ -187,9 +192,7 @@ function M.get_thread_at_cursor(doc_id, _content)
   for _, c in ipairs(comments) do
     if offset >= c.offset and offset <= c.offset + c.length then
       local thread = M._threads[c.threadId]
-      if thread then
-        return thread, c
-      end
+      if thread then return thread, c end
     end
   end
   return nil
@@ -207,9 +210,7 @@ function M.show_thread(thread)
   for _, msg in ipairs(thread.messages or {}) do
     local user = msg.user and (msg.user.first_name or msg.user.email or '?') or '?'
     local ts = ''
-    if msg.timestamp then
-      ts = ' (' .. os.date('%m/%d %H:%M', msg.timestamp / 1000) .. ')'
-    end
+    if msg.timestamp then ts = ' (' .. os.date('%m/%d %H:%M', msg.timestamp / 1000) .. ')' end
     table.insert(lines, user .. ts .. ':')
     -- Wrap long lines
     for _, line in ipairs(vim.split(msg.content or '', '\n', { plain = true })) do
@@ -218,9 +219,7 @@ function M.show_thread(thread)
     table.insert(lines, '')
   end
 
-  if #lines > 2 and lines[#lines] == '' then
-    table.remove(lines)
-  end
+  if #lines > 2 and lines[#lines] == '' then table.remove(lines) end
 
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -244,9 +243,7 @@ function M.show_thread(thread)
 
   -- Close on q, Esc, or when leaving the window
   local function close()
-    if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
+    if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
   end
   vim.keymap.set('n', 'q', close, { buffer = buf })
   vim.keymap.set('n', '<Esc>', close, { buffer = buf })
@@ -275,9 +272,7 @@ function M.list_all(_project_id)
       local thread = M._threads[c.threadId]
       if thread and not thread.resolved then
         local msg = ''
-        if thread.messages and #thread.messages > 0 then
-          msg = (thread.messages[1].content or ''):gsub('\n', ' ')
-        end
+        if thread.messages and #thread.messages > 0 then msg = (thread.messages[1].content or ''):gsub('\n', ' ') end
         table.insert(qf_items, {
           filename = 'overleaf://' .. doc_path,
           lnum = 1, -- approximate, would need content to compute
@@ -305,9 +300,7 @@ end
 function M.on_new_comment(data)
   if not data or not data.threadId then return end
   local thread = M._threads[data.threadId]
-  if thread and data.comment then
-    table.insert(thread.messages, data.comment)
-  end
+  if thread and data.comment then table.insert(thread.messages, data.comment) end
 end
 
 function M.on_resolve_thread(data)
@@ -334,9 +327,7 @@ function M.on_delete_thread(data)
   -- Remove from doc_comments
   for _, comments in pairs(M._doc_comments) do
     for i = #comments, 1, -1 do
-      if comments[i].threadId == data.threadId then
-        table.remove(comments, i)
-      end
+      if comments[i].threadId == data.threadId then table.remove(comments, i) end
     end
   end
 end

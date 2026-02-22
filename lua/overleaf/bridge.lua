@@ -22,20 +22,14 @@ function M.start(callback)
   -- Pass base_url to bridge as OVERLEAF_URL environment variable
   local env = nil
   local base_url = config.get().base_url
-  if base_url and base_url ~= 'https://www.overleaf.com' then
-    env = { OVERLEAF_URL = base_url }
-  end
+  if base_url and base_url ~= 'https://www.overleaf.com' then env = { OVERLEAF_URL = base_url } end
 
   M._job_id = vim.fn.jobstart({ node, script }, {
     env = env,
-    on_stdout = function(_, data, _)
-      M._on_stdout(data)
-    end,
+    on_stdout = function(_, data, _) M._on_stdout(data) end,
     on_stderr = function(_, data, _)
       for _, line in ipairs(data) do
-        if line ~= '' then
-          config.log('debug', 'bridge: %s', line)
-        end
+        if line ~= '' then config.log('debug', 'bridge: %s', line) end
       end
     end,
     on_exit = function(_, code, _)
@@ -45,22 +39,16 @@ function M.start(callback)
       M._started = false
       -- Notify pending requests of failure
       for _, pending in pairs(M._pending) do
-        if pending.timer then
-          vim.fn.timer_stop(pending.timer)
-        end
+        if pending.timer then vim.fn.timer_stop(pending.timer) end
         if pending.callback then
-          vim.schedule(function()
-            pending.callback({ code = 'BRIDGE_DIED', message = 'Bridge process exited' }, nil)
-          end)
+          vim.schedule(
+            function() pending.callback({ code = 'BRIDGE_DIED', message = 'Bridge process exited' }, nil) end
+          )
         end
       end
       M._pending = {}
       -- Trigger auto-restart if bridge died unexpectedly
-      if was_started and M._on_unexpected_exit then
-        vim.schedule(function()
-          M._on_unexpected_exit(code)
-        end)
-      end
+      if was_started and M._on_unexpected_exit then vim.schedule(function() M._on_unexpected_exit(code) end) end
     end,
     stdout_buffered = false,
     stderr_buffered = false,
@@ -95,15 +83,11 @@ function M.stop()
   end
 end
 
-function M.is_running()
-  return M._job_id ~= nil and M._started
-end
+function M.is_running() return M._job_id ~= nil and M._started end
 
 function M.request(method, params, callback)
   if not M._job_id then
-    if callback then
-      callback({ code = 'NOT_STARTED', message = 'Bridge not started' }, nil)
-    end
+    if callback then callback({ code = 'NOT_STARTED', message = 'Bridge not started' }, nil) end
     return
   end
 
@@ -121,9 +105,7 @@ function M.request(method, params, callback)
     local pending = M._pending[id]
     M._pending[id] = nil
     if pending and pending.callback then
-      vim.schedule(function()
-        pending.callback({ code = 'TIMEOUT', message = method .. ' timed out' }, nil)
-      end)
+      vim.schedule(function() pending.callback({ code = 'TIMEOUT', message = method .. ' timed out' }, nil) end)
     end
   end)
 
@@ -133,9 +115,7 @@ function M.request(method, params, callback)
 end
 
 function M.on_event(event_name, handler)
-  if not M._event_handlers[event_name] then
-    M._event_handlers[event_name] = {}
-  end
+  if not M._event_handlers[event_name] then M._event_handlers[event_name] = {} end
   table.insert(M._event_handlers[event_name], handler)
 end
 
@@ -160,9 +140,7 @@ function M._on_stdout(data)
       -- Previous buffer forms a complete line
       local line = M._buffer
       M._buffer = chunk
-      if line ~= '' then
-        M._handle_message(line)
-      end
+      if line ~= '' then M._handle_message(line) end
     end
   end
 end
@@ -179,14 +157,8 @@ function M._handle_message(line)
     local pending = M._pending[msg.id]
     M._pending[msg.id] = nil
     if pending then
-      if pending.timer then
-        vim.fn.timer_stop(pending.timer)
-      end
-      if pending.callback then
-        vim.schedule(function()
-          pending.callback(msg.error, msg.result)
-        end)
-      end
+      if pending.timer then vim.fn.timer_stop(pending.timer) end
+      if pending.callback then vim.schedule(function() pending.callback(msg.error, msg.result) end) end
     end
     return
   end

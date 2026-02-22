@@ -11,9 +11,7 @@ function M.grep(pattern, state)
 
   local docs = {}
   for _, entry in ipairs(project._project_tree) do
-    if entry.type == 'doc' then
-      table.insert(docs, entry)
-    end
+    if entry.type == 'doc' then table.insert(docs, entry) end
   end
 
   if #docs == 0 then
@@ -97,9 +95,7 @@ function M.grep(pattern, state)
       end
 
       -- Leave the doc after searching
-      bridge.request('leaveDoc', { docId = doc_entry.id }, function()
-        process_next(idx + 1)
-      end)
+      bridge.request('leaveDoc', { docId = doc_entry.id }, function() process_next(idx + 1) end)
     end)
   end
 

@@ -59,13 +59,15 @@ function M.create(doc, lines)
   -- Set filetype AFTER buffer is current (triggers FileType autocmds for treesitter, copilot, etc.)
   local ext = doc.path:match('%.([^%.]+)$')
   local ft_map = {
-    tex = 'tex', sty = 'tex', cls = 'tex',
-    bib = 'bib', bbl = 'tex',
-    txt = 'text', md = 'markdown',
+    tex = 'tex',
+    sty = 'tex',
+    cls = 'tex',
+    bib = 'bib',
+    bbl = 'tex',
+    txt = 'text',
+    md = 'markdown',
   }
-  if ft_map[ext] then
-    vim.bo[bufnr].filetype = ft_map[ext]
-  end
+  if ft_map[ext] then vim.bo[bufnr].filetype = ft_map[ext] end
 
   -- Start syntax highlighting and LSP
   config.log('debug', 'Buffer create: ext=%s ft=%s', tostring(ext), tostring(ft_map[ext]))
@@ -74,14 +76,10 @@ function M.create(doc, lines)
     local ts_lang_map = { tex = 'latex', bib = 'bibtex' }
     local lang = ts_lang_map[ft_map[ext]] or ft_map[ext]
     vim.schedule(function()
-      if not vim.api.nvim_buf_is_valid(bufnr) then
-        return
-      end
+      if not vim.api.nvim_buf_is_valid(bufnr) then return end
 
       local ok = pcall(vim.treesitter.start, bufnr, lang)
-      if not ok then
-        pcall(vim.cmd, 'syntax enable')
-      end
+      if not ok then pcall(vim.cmd, 'syntax enable') end
 
       -- Attach LSP servers to overleaf buffer (lspconfig skips overleaf:// URIs)
       config.log('info', 'Attaching LSP for ft=%s bufnr=%d', ft_map[ext], bufnr)
@@ -93,9 +91,7 @@ function M.create(doc, lines)
         -- Re-lint on text changes (debounced)
         vim.api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI' }, {
           buffer = bufnr,
-          callback = function()
-            M._schedule_lint(bufnr)
-          end,
+          callback = function() M._schedule_lint(bufnr) end,
         })
       end
     end)
@@ -127,9 +123,7 @@ function M._attach_lsp(bufnr, ft)
       cmd = { 'ltex-ls' },
       settings = { ltex = { language = 'en-US' } },
     })
-    if ft == 'tex' then
-      table.insert(servers, { name = 'texlab', cmd = { 'texlab' } })
-    end
+    if ft == 'tex' then table.insert(servers, { name = 'texlab', cmd = { 'texlab' } }) end
   end
 
   -- Mason installs to ~/.local/share/nvim/mason/bin/
@@ -140,9 +134,7 @@ function M._attach_lsp(bufnr, ft)
     -- Check system PATH and mason bin
     if vim.fn.executable(cmd) ~= 1 then
       local mason_cmd = mason_bin .. cmd
-      if vim.fn.executable(mason_cmd) == 1 then
-        srv.cmd[1] = mason_cmd
-      end
+      if vim.fn.executable(mason_cmd) == 1 then srv.cmd[1] = mason_cmd end
     end
     -- Skip if command not found anywhere
     if vim.fn.executable(srv.cmd[1]) ~= 1 then
@@ -153,9 +145,7 @@ function M._attach_lsp(bufnr, ft)
         cmd = srv.cmd,
         root_dir = vim.fn.getcwd(),
         settings = srv.settings,
-        get_language_id = function(_, filetype)
-          return lang_id_map[filetype] or filetype
-        end,
+        get_language_id = function(_, filetype) return lang_id_map[filetype] or filetype end,
       }, { bufnr = bufnr })
     end
   end
@@ -166,20 +156,25 @@ end
 ---@param doc table Document instance
 function M.attach(bufnr, doc)
   vim.api.nvim_buf_attach(bufnr, false, {
-    on_bytes = function(_, buf, _changedtick,
-                        start_row, start_col, byte_offset,
-                        _old_end_row, _old_end_col, old_end_byte,
-                        new_end_row, new_end_col, new_end_byte)
-
+    on_bytes = function(
+      _,
+      buf,
+      _changedtick,
+      start_row,
+      start_col,
+      byte_offset,
+      _old_end_row,
+      _old_end_col,
+      old_end_byte,
+      new_end_row,
+      new_end_col,
+      new_end_byte
+    )
       -- Guard: ignore changes triggered by applying remote ops
-      if doc.applying_remote then
-        return
-      end
+      if doc.applying_remote then return end
 
       -- Guard: ignore if document not joined
-      if not doc.joined then
-        return
-      end
+      if not doc.joined then return end
 
       local ops = {}
 
@@ -189,9 +184,7 @@ function M.attach(bufnr, doc)
       -- Delete operation
       if old_end_byte > 0 then
         local deleted_text = doc.content:sub(byte_offset + 1, byte_offset + old_end_byte)
-        if #deleted_text > 0 then
-          table.insert(ops, { p = char_offset, d = deleted_text })
-        end
+        if #deleted_text > 0 then table.insert(ops, { p = char_offset, d = deleted_text }) end
       end
 
       -- Insert operation
@@ -205,13 +198,10 @@ function M.attach(bufnr, doc)
           end_col = new_end_col
         end
 
-        local ok, new_lines = pcall(vim.api.nvim_buf_get_text,
-          buf, start_row, start_col, end_row, end_col, {})
+        local ok, new_lines = pcall(vim.api.nvim_buf_get_text, buf, start_row, start_col, end_row, end_col, {})
         if ok and new_lines then
           local inserted_text = table.concat(new_lines, '\n')
-          if #inserted_text > 0 then
-            table.insert(ops, { p = char_offset, i = inserted_text })
-          end
+          if #inserted_text > 0 then table.insert(ops, { p = char_offset, i = inserted_text }) end
         end
       end
 
@@ -229,9 +219,7 @@ end
 ---@param doc table Document instance
 ---@param ops table[] list of {p, i?, d?}
 function M.apply_remote(doc, ops)
-  if not doc.bufnr or not vim.api.nvim_buf_is_valid(doc.bufnr) then
-    return
-  end
+  if not doc.bufnr or not vim.api.nvim_buf_is_valid(doc.bufnr) then return end
 
   vim.schedule(function()
     doc.applying_remote = true
@@ -295,9 +283,7 @@ function M._run_chktex(bufnr)
     stdin = 'pipe',
     stdout_buffered = true,
     on_stdout = function(_, data)
-      if data then
-        stdout_chunks = data
-      end
+      if data then stdout_chunks = data end
     end,
     on_exit = function(_, _exit_code)
       vim.schedule(function()
@@ -337,21 +323,14 @@ end
 
 --- Schedule chktex lint with debounce
 function M._schedule_lint(bufnr)
-  if _lint_timer then
-    _lint_timer:stop()
-  end
-  _lint_timer = vim.defer_fn(function()
-    M._run_chktex(bufnr)
-  end, 1000)  -- 1 second debounce
+  if _lint_timer then _lint_timer:stop() end
+  _lint_timer = vim.defer_fn(function() M._run_chktex(bufnr) end, 1000) -- 1 second debounce
 end
-
 
 --- Cleanup buffer resources
 ---@param doc table Document instance
 function M.cleanup(doc)
-  if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-    vim.api.nvim_buf_delete(doc.bufnr, { force = true })
-  end
+  if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then vim.api.nvim_buf_delete(doc.bufnr, { force = true }) end
   doc.bufnr = nil
 end
 

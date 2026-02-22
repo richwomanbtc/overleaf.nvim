@@ -4,30 +4,21 @@ describe('config', function()
   -- Save original config and restore after each test
   local original_config
 
-  before_each(function()
-    original_config = vim.deepcopy(config._config)
-  end)
+  before_each(function() original_config = vim.deepcopy(config._config) end)
 
-  after_each(function()
-    config._config = original_config
-  end)
+  after_each(function() config._config = original_config end)
 
   describe('defaults', function()
-    it('has base_url defaulting to overleaf.com', function()
-      assert.are.equal('https://www.overleaf.com', config.get().base_url)
-    end)
+    it(
+      'has base_url defaulting to overleaf.com',
+      function() assert.are.equal('https://www.overleaf.com', config.get().base_url) end
+    )
 
-    it('has pdf_viewer defaulting to nil', function()
-      assert.is_nil(config.get().pdf_viewer)
-    end)
+    it('has pdf_viewer defaulting to nil', function() assert.is_nil(config.get().pdf_viewer) end)
 
-    it('has node_path defaulting to node', function()
-      assert.are.equal('node', config.get().node_path)
-    end)
+    it('has node_path defaulting to node', function() assert.are.equal('node', config.get().node_path) end)
 
-    it('has log_level defaulting to info', function()
-      assert.are.equal('info', config.get().log_level)
-    end)
+    it('has log_level defaulting to info', function() assert.are.equal('info', config.get().log_level) end)
   end)
 
   describe('setup', function()

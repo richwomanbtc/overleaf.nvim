@@ -79,15 +79,14 @@ function M.connect()
           return
         end
 
-        config.log('info', 'Authenticated as %s (%d projects)',
-          result.userEmail or result.userId, #result.projects)
+        config.log('info', 'Authenticated as %s (%d projects)', result.userEmail or result.userId, #result.projects)
         M._state.csrf_token = result.csrfToken
         project.set_projects(result.projects)
 
         -- Step 4: Select project
-        project.select_project(function(project_id, project_name)
-          M._connect_project(cookie, project_id, project_name)
-        end)
+        project.select_project(
+          function(project_id, project_name) M._connect_project(cookie, project_id, project_name) end
+        )
       end)
     end)
   end)
@@ -125,9 +124,7 @@ function M._get_cookie(callback)
       vim.schedule(function()
         vim.ui.select(profiles, {
           prompt = 'Select Chrome Profile:',
-          format_item = function(item)
-            return item.name .. ' (' .. item.dir .. ')'
-          end,
+          format_item = function(item) return item.name .. ' (' .. item.dir .. ')' end,
         }, function(choice)
           if choice then
             extract_from_profile(choice.dir)
@@ -187,9 +184,7 @@ function M._connect_project(cookie, project_id, project_name)
     require('overleaf.comments').load_threads(project_id)
 
     -- Show tree immediately
-    vim.schedule(function()
-      require('overleaf.tree').toggle()
-    end)
+    vim.schedule(function() require('overleaf.tree').toggle() end)
   end)
 end
 
@@ -197,16 +192,10 @@ function M._setup_event_handlers()
   bridge.on_event('otUpdateApplied', function(data)
     -- Skip own-ACK events (no op field = acknowledgment for our own op)
     -- Our ACK is already handled by the applyOtUpdate callback → _on_ack()
-    if not data.op then
-      return
-    end
+    if not data.op then return end
 
     local doc = M._state.documents[data.doc]
-    if doc then
-      doc:on_remote_op(data, function(transformed_ops)
-        buffer.apply_remote(doc, transformed_ops)
-      end)
-    end
+    if doc then doc:on_remote_op(data, function(transformed_ops) buffer.apply_remote(doc, transformed_ops) end) end
   end)
 
   bridge.on_event('otUpdateError', function(data)
@@ -214,16 +203,12 @@ function M._setup_event_handlers()
     -- Only rejoin if connected (disconnect handler handles reconnect separately)
     if M._state.connected then
       local doc = M._state.documents[data.doc]
-      if doc and not doc._rejoining then
-        doc:rejoin()
-      end
+      if doc and not doc._rejoining then doc:rejoin() end
     end
   end)
 
   bridge.on_event('disconnect', function(data)
-    if M._state.connected then
-      config.log('warn', 'Disconnected: %s — reconnecting...', data.reason or 'unknown')
-    end
+    if M._state.connected then config.log('warn', 'Disconnected: %s — reconnecting...', data.reason or 'unknown') end
     M._state.connected = false
     M._attempt_reconnect()
   end)
@@ -296,9 +281,7 @@ function M._setup_event_handlers()
         end
       end
 
-      vim.schedule(function()
-        require('overleaf.tree').refresh()
-      end)
+      vim.schedule(function() require('overleaf.tree').refresh() end)
       return
     end
 
@@ -309,7 +292,10 @@ function M._setup_event_handlers()
       local depth = 0
       if data.parentFolderId then
         for _, e in ipairs(project._project_tree) do
-          if e.id == data.parentFolderId then depth = (e.depth or 0) + 1 break end
+          if e.id == data.parentFolderId then
+            depth = (e.depth or 0) + 1
+            break
+          end
         end
       end
       project.add_entry({
@@ -320,9 +306,7 @@ function M._setup_event_handlers()
         depth = depth,
       })
     end
-    vim.schedule(function()
-      require('overleaf.tree').refresh()
-    end)
+    vim.schedule(function() require('overleaf.tree').refresh() end)
   end)
 
   bridge.on_event('reciveNewFile', function(data)
@@ -334,7 +318,10 @@ function M._setup_event_handlers()
       local depth = 0
       if data.parentFolderId then
         for _, e in ipairs(project._project_tree) do
-          if e.id == data.parentFolderId then depth = (e.depth or 0) + 1 break end
+          if e.id == data.parentFolderId then
+            depth = (e.depth or 0) + 1
+            break
+          end
         end
       end
       project.add_entry({
@@ -345,9 +332,7 @@ function M._setup_event_handlers()
         depth = depth,
       })
     end
-    vim.schedule(function()
-      require('overleaf.tree').refresh()
-    end)
+    vim.schedule(function() require('overleaf.tree').refresh() end)
   end)
 
   bridge.on_event('removeEntity', function(data)
@@ -363,9 +348,7 @@ function M._setup_event_handlers()
     end
 
     project.remove_entry(data.entityId)
-    vim.schedule(function()
-      require('overleaf.tree').refresh()
-    end)
+    vim.schedule(function() require('overleaf.tree').refresh() end)
   end)
 
   -- Comment events
@@ -408,15 +391,11 @@ function M._setup_event_handlers()
 
   -- Collaborator cursor tracking
   bridge.on_event('clientUpdated', function(data)
-    vim.schedule(function()
-      require('overleaf.cursors').on_client_updated(data)
-    end)
+    vim.schedule(function() require('overleaf.cursors').on_client_updated(data) end)
   end)
 
   bridge.on_event('clientDisconnected', function(data)
-    vim.schedule(function()
-      require('overleaf.cursors').on_client_disconnected(data)
-    end)
+    vim.schedule(function() require('overleaf.cursors').on_client_disconnected(data) end)
   end)
 end
 
@@ -442,14 +421,17 @@ function M._attempt_reconnect()
 
   -- Exponential backoff: 2s, 4s, 8s, 16s, 30s
   local delay = math.min(2000 * (2 ^ (M._reconnect.attempt - 1)), 30000)
-  config.log('debug', 'Reconnecting in %ds (attempt %d/%d)...',
-    delay / 1000, M._reconnect.attempt, M._reconnect.max_attempts)
+  config.log(
+    'debug',
+    'Reconnecting in %ds (attempt %d/%d)...',
+    delay / 1000,
+    M._reconnect.attempt,
+    M._reconnect.max_attempts
+  )
 
   M._reconnect.in_progress = true
 
-  if M._reconnect.timer then
-    vim.fn.timer_stop(M._reconnect.timer)
-  end
+  if M._reconnect.timer then vim.fn.timer_stop(M._reconnect.timer) end
 
   M._reconnect.timer = vim.fn.timer_start(delay, function()
     M._reconnect.timer = nil
@@ -502,9 +484,7 @@ function M._reconnect_to_project(cookie)
     config.log('info', 'Reconnected to: %s', M._state.project_name or '?')
 
     -- Re-join all open documents (wait for server to settle after restore)
-    vim.defer_fn(function()
-      M._rejoin_documents()
-    end, 3000)
+    vim.defer_fn(function() M._rejoin_documents() end, 3000)
   end)
 end
 
@@ -566,9 +546,7 @@ function M.open_document(doc_id_or_path, doc_path)
       local comments = require('overleaf.comments')
       comments.parse_ranges(doc_id, ranges)
       vim.schedule(function()
-        if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-          comments.render(doc.bufnr, doc_id, doc.content)
-        end
+        if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then comments.render(doc.bufnr, doc_id, doc.content) end
       end)
     end
   end)
@@ -592,9 +570,7 @@ function M.select_document()
     return
   end
 
-  project.select_document(function(doc_id, doc_path)
-    M.open_document(doc_id, doc_path)
-  end)
+  project.select_document(function(doc_id, doc_path) M.open_document(doc_id, doc_path) end)
 end
 
 function M.toggle_tree()
@@ -614,9 +590,7 @@ function M.preview_file()
   -- Get file entries from project tree
   local files = {}
   for _, entry in ipairs(project._project_tree) do
-    if entry.type == 'file' then
-      table.insert(files, entry)
-    end
+    if entry.type == 'file' then table.insert(files, entry) end
   end
 
   if #files == 0 then
@@ -642,9 +616,7 @@ function M.preview_file()
         return
       end
       config.log('info', 'Opening %s', result.path)
-      vim.schedule(function()
-        open_file(result.path)
-      end)
+      vim.schedule(function() open_file(result.path) end)
     end)
   end)
 end
@@ -689,7 +661,10 @@ function M.create_doc(name, parent_folder_id)
         local depth = 0
         if parent_folder_id then
           for _, e in ipairs(project._project_tree) do
-            if e.id == parent_folder_id then depth = (e.depth or 0) + 1 break end
+            if e.id == parent_folder_id then
+              depth = (e.depth or 0) + 1
+              break
+            end
           end
         end
         project.add_entry({
@@ -750,7 +725,10 @@ function M.create_folder(name, parent_folder_id)
         local depth = 0
         if parent_folder_id then
           for _, e in ipairs(project._project_tree) do
-            if e.id == parent_folder_id then depth = (e.depth or 0) + 1 break end
+            if e.id == parent_folder_id then
+              depth = (e.depth or 0) + 1
+              break
+            end
           end
         end
         project.add_entry({
@@ -875,9 +853,7 @@ function M.rename_entity()
               vim.api.nvim_buf_set_name(doc.bufnr, 'overleaf://' .. updated.path)
             end
           end
-          if updated then
-            config.log('info', 'Renamed to: %s', updated.path)
-          end
+          if updated then config.log('info', 'Renamed to: %s', updated.path) end
           require('overleaf.tree').refresh()
         end)
       end)
@@ -953,9 +929,7 @@ function M.history()
       return
     end
 
-    vim.schedule(function()
-      M._show_history(updates)
-    end)
+    vim.schedule(function() M._show_history(updates) end)
   end)
 end
 
@@ -1022,9 +996,7 @@ function M.compile()
       config.log('warn', 'Compile status: %s', result.status)
     end
 
-    vim.schedule(function()
-      M._parse_compile_log(result.log or '')
-    end)
+    vim.schedule(function() M._parse_compile_log(result.log or '') end)
   end)
 end
 
@@ -1047,9 +1019,7 @@ function M._open_pdf(output_files)
       config.log('debug', 'PDF download failed: %s', err.message)
       return
     end
-    vim.schedule(function()
-      open_file(result.path)
-    end)
+    vim.schedule(function() open_file(result.path) end)
   end)
 end
 
@@ -1058,9 +1028,7 @@ function M._parse_compile_log(log_text)
 
   -- Clear all previous diagnostics
   for _, doc in pairs(M._state.documents) do
-    if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-      vim.diagnostic.set(ns, doc.bufnr, {})
-    end
+    if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then vim.diagnostic.set(ns, doc.bufnr, {}) end
   end
 
   if #log_text == 0 then return end
@@ -1072,9 +1040,7 @@ function M._parse_compile_log(log_text)
       path_to_doc[doc.path] = doc
       -- Also index without leading path components for relative matches
       local basename = doc.path:match('[^/]+$')
-      if basename then
-        path_to_doc[basename] = doc
-      end
+      if basename then path_to_doc[basename] = doc end
     end
   end
 
@@ -1181,15 +1147,18 @@ function M._parse_compile_log(log_text)
   local error_count, warn_count, hint_count = 0, 0, 0
   for _, diags in pairs(diagnostics) do
     for _, d in ipairs(diags) do
-      if d.severity == vim.diagnostic.severity.ERROR then error_count = error_count + 1
-      elseif d.severity == vim.diagnostic.severity.WARN then warn_count = warn_count + 1
-      else hint_count = hint_count + 1 end
+      if d.severity == vim.diagnostic.severity.ERROR then
+        error_count = error_count + 1
+      elseif d.severity == vim.diagnostic.severity.WARN then
+        warn_count = warn_count + 1
+      else
+        hint_count = hint_count + 1
+      end
     end
   end
 
   if error_count > 0 or warn_count > 0 then
-    config.log('info', 'Diagnostics: %d error(s), %d warning(s), %d hint(s)',
-      error_count, warn_count, hint_count)
+    config.log('info', 'Diagnostics: %d error(s), %d warning(s), %d hint(s)', error_count, warn_count, hint_count)
   end
 end
 
@@ -1210,9 +1179,7 @@ function M.refresh_comments()
       if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) and doc.joined then
         bridge.request('joinDoc', { docId = doc_id }, function(join_err, result)
           if join_err then return end
-          if result.ranges then
-            comments.parse_ranges(doc_id, result.ranges)
-          end
+          if result.ranges then comments.parse_ranges(doc_id, result.ranges) end
           vim.schedule(function()
             if doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
               comments.render(doc.bufnr, doc_id, doc.content)
@@ -1250,15 +1217,24 @@ function M.show_comment()
   local comments = require('overleaf.comments')
   local doc_comments = comments._doc_comments[doc_id]
   local thread_count = vim.tbl_count(comments._threads)
-  config.log('debug', 'show_comment: doc=%s, threads=%d, doc_comments=%d',
-    doc_id, thread_count, doc_comments and #doc_comments or 0)
+  config.log(
+    'debug',
+    'show_comment: doc=%s, threads=%d, doc_comments=%d',
+    doc_id,
+    thread_count,
+    doc_comments and #doc_comments or 0
+  )
 
   local thread, _ = comments.get_thread_at_cursor(doc_id, doc.content)
   if thread then
     comments.show_thread(thread)
   else
-    config.log('info', 'No comment at cursor (threads=%d, doc_comments=%d)',
-      thread_count, doc_comments and #doc_comments or 0)
+    config.log(
+      'info',
+      'No comment at cursor (threads=%d, doc_comments=%d)',
+      thread_count,
+      doc_comments and #doc_comments or 0
+    )
   end
 end
 
@@ -1363,9 +1339,7 @@ function M.resolve_comment()
       end
       thread.resolved = false
       config.log('info', 'Thread reopened')
-      vim.schedule(function()
-        comments.render(bufnr, doc_id, doc.content)
-      end)
+      vim.schedule(function() comments.render(bufnr, doc_id, doc.content) end)
     end)
   else
     bridge.request('resolveThread', {
@@ -1381,9 +1355,7 @@ function M.resolve_comment()
       end
       thread.resolved = true
       config.log('info', 'Thread resolved')
-      vim.schedule(function()
-        comments.render(bufnr, doc_id, doc.content)
-      end)
+      vim.schedule(function() comments.render(bufnr, doc_id, doc.content) end)
     end)
   end
 end
@@ -1404,9 +1376,7 @@ function M.disconnect()
 
   -- Leave all documents
   for _, doc in pairs(M._state.documents) do
-    doc:leave(function()
-      buffer.cleanup(doc)
-    end)
+    doc:leave(function() buffer.cleanup(doc) end)
   end
   M._state.documents = {}
 
@@ -1433,10 +1403,13 @@ function M.status()
     doc_count = doc_count + 1
   end
 
-  config.log('info', 'Project: %s | Documents: %d | Connected: %s',
+  config.log(
+    'info',
+    'Project: %s | Documents: %d | Connected: %s',
     M._state.project_name or '?',
     doc_count,
-    M._state.connected and 'yes' or 'no')
+    M._state.connected and 'yes' or 'no'
+  )
 
   for _, doc in pairs(M._state.documents) do
     config.log('info', '  - %s (v%d)', doc.path, doc.version or 0)
@@ -1446,9 +1419,7 @@ end
 --- Statusline component for lualine or custom statusline
 --- Usage with lualine: sections = { lualine_x = { require('overleaf').statusline } }
 function M.statusline()
-  if not M._state.connected then
-    return ''
-  end
+  if not M._state.connected then return '' end
 
   local proj = M._state.project_name or '?'
 

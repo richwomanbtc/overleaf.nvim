@@ -23,20 +23,12 @@ local function make_doc(content, path)
     _submitted_ops = {},
     _rejoin_called = false,
 
-    submit_op = function(self, ops)
-      table.insert(self._submitted_ops, vim.deepcopy(ops))
-    end,
+    submit_op = function(self, ops) table.insert(self._submitted_ops, vim.deepcopy(ops)) end,
 
     check_content = function(self)
-      if not self.joined or self._rejoining then
-        return true
-      end
-      if not self.bufnr or not vim.api.nvim_buf_is_valid(self.bufnr) then
-        return true
-      end
-      if self.applying_remote then
-        return true
-      end
+      if not self.joined or self._rejoining then return true end
+      if not self.bufnr or not vim.api.nvim_buf_is_valid(self.bufnr) then return true end
+      if self.applying_remote then return true end
       local buf_lines = vim.api.nvim_buf_get_lines(self.bufnr, 0, -1, false)
       local buf_content = table.concat(buf_lines, '\n')
       if buf_content ~= self.content then
@@ -46,9 +38,7 @@ local function make_doc(content, path)
       return true
     end,
 
-    rejoin = function(self)
-      self._rejoin_called = true
-    end,
+    rejoin = function(self) self._rejoin_called = true end,
   }
 end
 
@@ -166,9 +156,7 @@ describe('buffer', function()
     end)
 
     after_each(function()
-      if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-        vim.api.nvim_buf_delete(bufnr, { force = true })
-      end
+      if bufnr and vim.api.nvim_buf_is_valid(bufnr) then vim.api.nvim_buf_delete(bufnr, { force = true }) end
     end)
 
     it('generates insert op at end', function()
@@ -367,9 +355,7 @@ describe('buffer', function()
 
       buffer.apply_remote(doc, { { p = 5, i = ' Beautiful' } })
 
-      vim.wait(100, function()
-        return false
-      end)
+      vim.wait(100, function() return false end)
 
       local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
       local buf_content = table.concat(buf_lines, '\n')
@@ -387,9 +373,7 @@ describe('buffer', function()
 
       buffer.apply_remote(doc, { { p = 5, d = ' Beautiful' } })
 
-      vim.wait(100, function()
-        return false
-      end)
+      vim.wait(100, function() return false end)
 
       local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
       local buf_content = table.concat(buf_lines, '\n')
@@ -407,9 +391,7 @@ describe('buffer', function()
 
       buffer.apply_remote(doc, { { p = 5, i = '日本' } })
 
-      vim.wait(100, function()
-        return false
-      end)
+      vim.wait(100, function() return false end)
 
       local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
       local buf_content = table.concat(buf_lines, '\n')
@@ -427,9 +409,7 @@ describe('buffer', function()
 
       buffer.apply_remote(doc, { { p = 6, i = '\nNew Line' } })
 
-      vim.wait(100, function()
-        return false
-      end)
+      vim.wait(100, function() return false end)
 
       local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
       local buf_content = table.concat(buf_lines, '\n')
@@ -459,13 +439,7 @@ describe('buffer', function()
     local function make_diverged(buf_content, doc_content)
       local doc = make_doc(doc_content)
       local buf = vim.api.nvim_create_buf(true, false)
-      vim.api.nvim_buf_set_lines(
-        buf,
-        0,
-        -1,
-        false,
-        vim.split(buf_content, '\n', { plain = true })
-      )
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(buf_content, '\n', { plain = true }))
       doc.bufnr = buf
       buffer.attach(buf, doc)
       return doc, buf
@@ -689,9 +663,7 @@ describe('buffer', function()
       -- Old method (the bug): single quotes don't expand \<BS>\<Esc>
       local old_undolevels = vim.bo[buf].undolevels
       vim.bo[buf].undolevels = -1
-      vim.api.nvim_buf_call(buf, function()
-        vim.cmd("exe 'normal a \\<BS>\\<Esc>'")
-      end)
+      vim.api.nvim_buf_call(buf, function() vim.cmd("exe 'normal a \\<BS>\\<Esc>'") end)
       vim.bo[buf].undolevels = old_undolevels
 
       local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
@@ -740,9 +712,7 @@ describe('buffer', function()
 
       -- Simulate old undo-clear (inserts garbage)
       vim.bo[buf].undolevels = -1
-      vim.api.nvim_buf_call(buf, function()
-        vim.cmd("exe 'normal a \\<BS>\\<Esc>'")
-      end)
+      vim.api.nvim_buf_call(buf, function() vim.cmd("exe 'normal a \\<BS>\\<Esc>'") end)
       vim.bo[buf].undolevels = 1000
 
       -- Buffer now has garbage, doc.content does not

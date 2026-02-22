@@ -81,9 +81,7 @@ end
 
 --- Refresh the tree display
 function M.refresh()
-  if not M._bufnr or not vim.api.nvim_buf_is_valid(M._bufnr) then
-    return
-  end
+  if not M._bufnr or not vim.api.nvim_buf_is_valid(M._bufnr) then return end
 
   local tree = project._project_tree
   local lines = {}
@@ -105,9 +103,7 @@ function M.refresh()
     table.insert(lines, line)
   end
 
-  if #lines == 0 then
-    lines = { '  (no files)' }
-  end
+  if #lines == 0 then lines = { '  (no files)' } end
 
   vim.bo[M._bufnr].modifiable = true
   vim.api.nvim_buf_set_lines(M._bufnr, 0, -1, false, lines)
@@ -116,9 +112,7 @@ function M.refresh()
   -- Apply highlights
   vim.api.nvim_buf_clear_namespace(M._bufnr, ns, 0, -1)
   for i, entry in ipairs(tree) do
-    if entry.type == 'folder' then
-      vim.api.nvim_buf_add_highlight(M._bufnr, ns, 'Directory', i - 1, 0, -1)
-    end
+    if entry.type == 'folder' then vim.api.nvim_buf_add_highlight(M._bufnr, ns, 'Directory', i - 1, 0, -1) end
   end
 end
 
@@ -164,9 +158,7 @@ function M._get_parent_folder_id()
   -- For files/docs, find parent folder by path
   local parent_path = entry.path:match('^(.*/)') or ''
   for _, e in ipairs(tree) do
-    if e.type == 'folder' and e.path == parent_path then
-      return e.id
-    end
+    if e.type == 'folder' and e.path == parent_path then return e.id end
   end
   return nil -- root folder
 end
