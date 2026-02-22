@@ -74,6 +74,10 @@ function M.create(doc, lines)
     local ts_lang_map = { tex = 'latex', bib = 'bibtex' }
     local lang = ts_lang_map[ft_map[ext]] or ft_map[ext]
     vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+
       local ok = pcall(vim.treesitter.start, bufnr, lang)
       if not ok then
         pcall(vim.cmd, 'syntax enable')
