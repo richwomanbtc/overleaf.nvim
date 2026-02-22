@@ -6,15 +6,15 @@ local buffer = require('overleaf.buffer')
 
 local M = {}
 
---- Open a file with the configured viewer or platform default
+--- Open a file with the configured viewer or platform default.
+--- When pdf_viewer is set, runs it as a detached background process
+--- (Neovim's :terminal does not support graphics protocols like Kitty/Sixel).
 ---@param file_path string
-local function open_file(file_path)
+function M._open_file(file_path)
   local viewer = config.get().pdf_viewer
   if viewer then
-    -- User-configured viewer: open in terminal split (supports TUI viewers like tdf)
-    vim.cmd('split | terminal ' .. vim.fn.shellescape(viewer) .. ' ' .. vim.fn.shellescape(file_path))
+    vim.fn.jobstart({ viewer, file_path }, { detach = true })
   else
-    -- Auto-detect platform launcher (runs in background)
     local cmd
     if vim.fn.has('mac') == 1 then
       cmd = { 'open', file_path }
@@ -23,7 +23,7 @@ local function open_file(file_path)
     else
       cmd = { 'xdg-open', file_path }
     end
-    vim.fn.system(cmd)
+    vim.fn.jobstart(cmd, { detach = true })
   end
 end
 
@@ -616,7 +616,7 @@ function M.preview_file()
         return
       end
       config.log('info', 'Opening %s', result.path)
-      vim.schedule(function() open_file(result.path) end)
+      vim.schedule(function() M._open_file(result.path) end)
     end)
   end)
 end
@@ -1019,7 +1019,7 @@ function M._open_pdf(output_files)
       config.log('debug', 'PDF download failed: %s', err.message)
       return
     end
-    vim.schedule(function() open_file(result.path) end)
+    vim.schedule(function() M._open_file(result.path) end)
   end)
 end
 
