@@ -6,3 +6,6 @@ tests/node/package-lock.json
 .claude/
 *.rej
 *.orig
+.tests/
+nvim-linux-x86_64/
+nvim-linux-x86_64.tar.gz
