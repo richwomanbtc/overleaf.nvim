@@ -58,9 +58,11 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie and projectId are required' };
     }
 
-    // Fetch GCLB cookie for load balancer stickiness
-    cookie = await auth.updateCookies(cookie);
-    console.log('Updated cookies for socket connection');
+    // Fetch GCLB cookie for load balancer stickiness (skip for local/test servers)
+    if (!process.env.OVERLEAF_URL) {
+      cookie = await auth.updateCookies(cookie);
+      console.log('Updated cookies for socket connection');
+    }
 
     if (socketManager) {
       socketManager.disconnect();

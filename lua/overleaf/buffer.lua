@@ -42,6 +42,10 @@ function M.create(doc, lines)
   -- Attach change detection
   M.attach(bufnr, doc)
 
+  -- Verify buffer matches doc.content after undo-clear
+  -- (guards against Issue #5: exe 'normal a \<BS>\<Esc>' inserting garbage)
+  doc:check_content()
+
   -- Open buffer in current window FIRST (so FileType autocmds fire on current buffer)
   vim.api.nvim_set_current_buf(bufnr)
 
