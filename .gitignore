@@ -1,6 +1,11 @@
 .env
 node/node_modules/
 node/package-lock.json
+tests/node/node_modules/
+tests/node/package-lock.json
 .claude/
 *.rej
 *.orig
+.tests/
+nvim-linux-x86_64/
+nvim-linux-x86_64.tar.gz

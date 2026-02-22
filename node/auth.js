@@ -1,14 +1,18 @@
 'use strict';
 
 const https = require('https');
+const http = require('http');
 const cheerio = require('cheerio');
+
+const BASE_URL = process.env.OVERLEAF_URL || 'https://www.overleaf.com';
 
 function httpGet(url, cookie) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    const httpModule = parsed.protocol === 'http:' ? http : https;
     const options = {
       hostname: parsed.hostname,
-      port: parsed.port || 443,
+      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
@@ -18,7 +22,7 @@ function httpGet(url, cookie) {
       },
     };
 
-    const req = https.request(options, (res) => {
+    const req = httpModule.request(options, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -35,7 +39,7 @@ function httpGet(url, cookie) {
 }
 
 async function fetchProjectPage(cookie) {
-  const res = await httpGet('https://www.overleaf.com/project', cookie);
+  const res = await httpGet(BASE_URL + '/project', cookie);
 
   if (res.status === 302) {
     throw { code: 'AUTH_FAILED', message: 'Cookie expired or invalid (redirected to login)' };
@@ -101,7 +105,7 @@ async function fetchProjectPage(cookie) {
  * Returns the updated cookie string with GCLB appended.
  */
 async function updateCookies(cookie) {
-  const res = await httpGet('https://www.overleaf.com/socket.io/socket.io.js', cookie);
+  const res = await httpGet(BASE_URL + '/socket.io/socket.io.js', cookie);
 
   // Extract set-cookie header
   const setCookie = res.headers['set-cookie'];
@@ -121,10 +125,11 @@ async function updateCookies(cookie) {
 function httpPost(url, cookie, csrfToken, body) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    const httpModule = parsed.protocol === 'http:' ? http : https;
     const data = JSON.stringify(body);
     const options = {
       hostname: parsed.hostname,
-      port: parsed.port || 443,
+      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
       path: parsed.pathname + parsed.search,
       method: 'POST',
       headers: {
@@ -137,7 +142,7 @@ function httpPost(url, cookie, csrfToken, body) {
       },
     };
 
-    const req = https.request(options, (res) => {
+    const req = httpModule.request(options, (res) => {
       let responseBody = '';
       res.on('data', (chunk) => { responseBody += chunk; });
       res.on('end', () => {
@@ -157,9 +162,10 @@ function httpPost(url, cookie, csrfToken, body) {
 function httpDelete(url, cookie, csrfToken) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    const httpModule = parsed.protocol === 'http:' ? http : https;
     const options = {
       hostname: parsed.hostname,
-      port: parsed.port || 443,
+      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
       path: parsed.pathname + parsed.search,
       method: 'DELETE',
       headers: {
@@ -170,7 +176,7 @@ function httpDelete(url, cookie, csrfToken) {
       },
     };
 
-    const req = https.request(options, (res) => {
+    const req = httpModule.request(options, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -191,6 +197,7 @@ function httpPostMultipart(url, cookie, csrfToken, filePath, fileName) {
     const fs = require('fs');
     const path = require('path');
     const parsed = new URL(url);
+    const httpModule = parsed.protocol === 'http:' ? http : https;
     const boundary = '----OverleafNeovim' + Date.now().toString(36);
     fileName = fileName || path.basename(filePath);
 
@@ -207,7 +214,7 @@ function httpPostMultipart(url, cookie, csrfToken, filePath, fileName) {
 
     const options = {
       hostname: parsed.hostname,
-      port: parsed.port || 443,
+      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
       path: parsed.pathname + parsed.search,
       method: 'POST',
       headers: {
@@ -220,7 +227,7 @@ function httpPostMultipart(url, cookie, csrfToken, filePath, fileName) {
       },
     };
 
-    const req = https.request(options, (res) => {
+    const req = httpModule.request(options, (res) => {
       let responseBody = '';
       res.on('data', (chunk) => { responseBody += chunk; });
       res.on('end', () => {

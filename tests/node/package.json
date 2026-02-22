@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Test dependencies for overleaf.nvim integration tests",
+  "dependencies": {
+    "ws": "^8.0.0"
+  }
+}

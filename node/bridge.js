@@ -10,6 +10,8 @@ const { getOverleafCookie, listProfiles } = require('./chrome-cookie');
 const origLog = console.log;
 console.log = (...args) => console.error('[bridge]', ...args);
 
+const BASE_URL = process.env.OVERLEAF_URL || 'https://www.overleaf.com';
+
 let requestId = 0;
 let socketManager = null;
 let pendingRequests = 0;
@@ -58,9 +60,11 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie and projectId are required' };
     }
 
-    // Fetch GCLB cookie for load balancer stickiness
-    cookie = await auth.updateCookies(cookie);
-    console.log('Updated cookies for socket connection');
+    // Fetch GCLB cookie for load balancer stickiness (skip for local/test servers)
+    if (!process.env.OVERLEAF_URL) {
+      cookie = await auth.updateCookies(cookie);
+      console.log('Updated cookies for socket connection');
+    }
 
     if (socketManager) {
       socketManager.disconnect();
@@ -100,7 +104,7 @@ const handlers = {
     }
 
     const compileRes = await auth.httpPost(
-      `https://www.overleaf.com/project/${projectId}/compile?auto_compile=true`,
+      `${BASE_URL}/project/${projectId}/compile?auto_compile=true`,
       cookie, csrfToken,
       { check: 'silent', draft: false, incrementalCompilesEnabled: true, stopOnFirstError: false }
     );
@@ -115,7 +119,7 @@ const handlers = {
     const logFile = (parsed.outputFiles || []).find(f => f.path === 'output.log');
     let log = '';
     if (logFile) {
-      const logUrl = `https://www.overleaf.com${logFile.url}`;
+      const logUrl = `${BASE_URL}${logFile.url}`;
       const logRes = await auth.httpGet(logUrl, cookie);
       log = logRes.body;
     }
@@ -130,13 +134,14 @@ const handlers = {
     }
 
     const tmpPath = require('path').join(require('os').tmpdir(), 'overleaf_' + (fileName || 'download'));
-    const https = require('https');
     const fs = require('fs');
 
     await new Promise((resolve, reject) => {
       const parsed = new URL(url);
-      https.get({
+      const httpModule = parsed.protocol === 'http:' ? require('http') : require('https');
+      httpModule.get({
         hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
         path: parsed.pathname + parsed.search,
         headers: { 'Cookie': cookie },
       }, (res) => {
@@ -156,22 +161,25 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, projectId, and fileId are required' };
     }
 
-    const url = `https://www.overleaf.com/project/${projectId}/file/${fileId}`;
+    const url = `${BASE_URL}/project/${projectId}/file/${fileId}`;
     const tmpPath = require('path').join(require('os').tmpdir(), 'overleaf_' + (fileName || fileId));
 
     // Download binary file
-    const https = require('https');
     const fs = require('fs');
     await new Promise((resolve, reject) => {
       const parsed = new URL(url);
-      https.get({
+      const httpModule = parsed.protocol === 'http:' ? require('http') : require('https');
+      httpModule.get({
         hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
         path: parsed.pathname,
         headers: { 'Cookie': cookie },
       }, (res) => {
         if (res.statusCode === 302 && res.headers.location) {
           // Follow redirect
-          https.get(res.headers.location, { headers: { 'Cookie': cookie } }, (res2) => {
+          const redirectParsed = new URL(res.headers.location);
+          const redirectModule = redirectParsed.protocol === 'http:' ? require('http') : require('https');
+          redirectModule.get(res.headers.location, { headers: { 'Cookie': cookie } }, (res2) => {
             const ws = fs.createWriteStream(tmpPath);
             res2.pipe(ws);
             ws.on('finish', () => { ws.close(); resolve(); });
@@ -195,7 +203,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, and name are required' };
     }
     const res = await auth.httpPost(
-      `https://www.overleaf.com/project/${projectId}/doc`,
+      `${BASE_URL}/project/${projectId}/doc`,
       cookie, csrfToken,
       { name, parent_folder_id: parentFolderId || null }
     );
@@ -211,7 +219,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, and name are required' };
     }
     const res = await auth.httpPost(
-      `https://www.overleaf.com/project/${projectId}/folder`,
+      `${BASE_URL}/project/${projectId}/folder`,
       cookie, csrfToken,
       { name, parent_folder_id: parentFolderId || null }
     );
@@ -227,7 +235,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, entityId, entityType, and newName are required' };
     }
     const res = await auth.httpPost(
-      `https://www.overleaf.com/project/${projectId}/${entityType}/${entityId}/rename`,
+      `${BASE_URL}/project/${projectId}/${entityType}/${entityId}/rename`,
       cookie, csrfToken,
       { name: newName }
     );
@@ -243,7 +251,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, entityId, and entityType are required' };
     }
     const res = await auth.httpDelete(
-      `https://www.overleaf.com/project/${projectId}/${entityType}/${entityId}`,
+      `${BASE_URL}/project/${projectId}/${entityType}/${entityId}`,
       cookie, csrfToken
     );
     if (res.status !== 204 && res.status !== 200) {
@@ -262,7 +270,7 @@ const handlers = {
       throw { code: 'FILE_NOT_FOUND', message: `File not found: ${filePath}` };
     }
     const folderId = parentFolderId || 'rootFolder';
-    const url = `https://www.overleaf.com/project/${projectId}/upload?folder_id=${folderId}`;
+    const url = `${BASE_URL}/project/${projectId}/upload?folder_id=${folderId}`;
     const res = await auth.httpPostMultipart(url, cookie, csrfToken, filePath, fileName);
     if (res.status !== 200) {
       throw { code: 'UPLOAD_FAILED', message: `Upload failed: ${res.status} ${res.body}` };
@@ -276,7 +284,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie and projectId are required' };
     }
     const res = await auth.httpGet(
-      `https://www.overleaf.com/project/${projectId}/updates?min_count=${minCount || 15}`,
+      `${BASE_URL}/project/${projectId}/updates?min_count=${minCount || 15}`,
       cookie
     );
     if (res.status !== 200) {
@@ -291,7 +299,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie and projectId are required' };
     }
     const res = await auth.httpGet(
-      `https://www.overleaf.com/project/${projectId}/threads`,
+      `${BASE_URL}/project/${projectId}/threads`,
       cookie
     );
     if (res.status !== 200) {
@@ -306,7 +314,7 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, threadId, and content are required' };
     }
     const res = await auth.httpPost(
-      `https://www.overleaf.com/project/${projectId}/thread/${threadId}/messages`,
+      `${BASE_URL}/project/${projectId}/thread/${threadId}/messages`,
       cookie, csrfToken,
       { content }
     );
@@ -322,8 +330,8 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, and threadId are required' };
     }
     const url = docId
-      ? `https://www.overleaf.com/project/${projectId}/doc/${docId}/thread/${threadId}/resolve`
-      : `https://www.overleaf.com/project/${projectId}/thread/${threadId}/resolve`;
+      ? `${BASE_URL}/project/${projectId}/doc/${docId}/thread/${threadId}/resolve`
+      : `${BASE_URL}/project/${projectId}/thread/${threadId}/resolve`;
     const res = await auth.httpPost(url, cookie, csrfToken, {});
     if (res.status < 200 || res.status >= 300) {
       throw { code: 'RESOLVE_FAILED', message: `Resolve thread failed: ${res.status}` };
@@ -337,8 +345,8 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, and threadId are required' };
     }
     const url = docId
-      ? `https://www.overleaf.com/project/${projectId}/doc/${docId}/thread/${threadId}/reopen`
-      : `https://www.overleaf.com/project/${projectId}/thread/${threadId}/reopen`;
+      ? `${BASE_URL}/project/${projectId}/doc/${docId}/thread/${threadId}/reopen`
+      : `${BASE_URL}/project/${projectId}/thread/${threadId}/reopen`;
     const res = await auth.httpPost(url, cookie, csrfToken, {});
     if (res.status < 200 || res.status >= 300) {
       throw { code: 'REOPEN_FAILED', message: `Reopen thread failed: ${res.status}` };
@@ -352,8 +360,8 @@ const handlers = {
       throw { code: 'MISSING_PARAM', message: 'cookie, csrfToken, projectId, and threadId are required' };
     }
     const url = docId
-      ? `https://www.overleaf.com/project/${projectId}/doc/${docId}/thread/${threadId}`
-      : `https://www.overleaf.com/project/${projectId}/thread/${threadId}`;
+      ? `${BASE_URL}/project/${projectId}/doc/${docId}/thread/${threadId}`
+      : `${BASE_URL}/project/${projectId}/thread/${threadId}`;
     const res = await auth.httpDelete(url, cookie, csrfToken);
     if (res.status !== 200 && res.status !== 204) {
       throw { code: 'DELETE_FAILED', message: `Delete thread failed: ${res.status}` };

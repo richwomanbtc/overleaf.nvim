@@ -91,6 +91,11 @@ function Document:flush()
     return
   end
 
+  -- Pre-flight check: verify buffer and doc.content are in sync
+  if not self:check_content() then
+    return -- check_content triggers rejoin on mismatch
+  end
+
   self.inflight_op = self.pending_ops
   self.pending_ops = nil
 
@@ -101,9 +106,10 @@ function Document:flush()
     content = self.server_content,
   }, function(err, _)
     if err then
-      config.log('debug', 'OT update failed: %s', err.message)
+      config.log('warn', 'OT update failed for %s: %s — rejoining', self.path, err.message)
       self.inflight_op = nil
       self.pending_ops = nil
+      self:rejoin()
       return
     end
     self:_on_ack()
@@ -177,6 +183,27 @@ function Document:rejoin(attempt)
       end
     end)
   end, delay)
+end
+
+--- Verify that the buffer content matches doc.content.
+--- If they diverge (e.g. due to undo-clear side effects or missed events),
+--- rejoin to resync from the server.
+---@return boolean true if content matches
+function Document:check_content()
+  if not self.joined or self._rejoining then return true end
+  if not self.bufnr or not vim.api.nvim_buf_is_valid(self.bufnr) then return true end
+  if self.applying_remote then return true end
+
+  local lines = vim.api.nvim_buf_get_lines(self.bufnr, 0, -1, false)
+  local buf_content = table.concat(lines, '\n')
+
+  if buf_content ~= self.content then
+    config.log('warn', 'Content divergence detected in %s (buf=%d, doc=%d bytes) — rejoining',
+      self.path, #buf_content, #self.content)
+    self:rejoin()
+    return false
+  end
+  return true
 end
 
 --- Handle a remote OT update from another user

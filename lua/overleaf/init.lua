@@ -6,6 +6,27 @@ local buffer = require('overleaf.buffer')
 
 local M = {}
 
+--- Open a file with the configured viewer or platform default
+---@param file_path string
+local function open_file(file_path)
+  local viewer = config.get().pdf_viewer
+  if viewer then
+    -- User-configured viewer: open in terminal split (supports TUI viewers like tdf)
+    vim.cmd('split | terminal ' .. vim.fn.shellescape(viewer) .. ' ' .. vim.fn.shellescape(file_path))
+  else
+    -- Auto-detect platform launcher (runs in background)
+    local cmd
+    if vim.fn.has('mac') == 1 then
+      cmd = { 'open', file_path }
+    elseif vim.fn.has('wsl') == 1 then
+      cmd = { 'wslview', file_path }
+    else
+      cmd = { 'xdg-open', file_path }
+    end
+    vim.fn.system(cmd)
+  end
+end
+
 M._state = {
   connected = false,
   project_name = nil,
@@ -622,7 +643,7 @@ function M.preview_file()
       end
       config.log('info', 'Opening %s', result.path)
       vim.schedule(function()
-        vim.fn.system({ 'open', result.path })
+        open_file(result.path)
       end)
     end)
   end)
@@ -1019,7 +1040,7 @@ function M._open_pdf(output_files)
 
   bridge.request('downloadUrl', {
     cookie = config.get().cookie,
-    url = 'https://www.overleaf.com' .. pdf_file.url,
+    url = config.get().base_url .. pdf_file.url,
     fileName = (M._state.project_name or 'output') .. '.pdf',
   }, function(err, result)
     if err then
@@ -1027,7 +1048,7 @@ function M._open_pdf(output_files)
       return
     end
     vim.schedule(function()
-      vim.fn.system({ 'open', result.path })
+      open_file(result.path)
     end)
   end)
 end

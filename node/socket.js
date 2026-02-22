@@ -14,8 +14,9 @@ const crypto = require('crypto');
     const options = this.options;
     const extraHeaders = options.extraHeaders || {};
 
+    const scheme = options.secure === false ? 'http:/' : 'https:/';
     const handshakeUrl = [
-      'https:/',
+      scheme,
       options.host + ':' + options.port,
       options.resource,
       io.protocol,
@@ -25,9 +26,10 @@ const crypto = require('crypto');
     const fullUrl = queryStr ? handshakeUrl + '&' + queryStr : handshakeUrl;
     const parsed = new (require('url').URL)(fullUrl);
 
-    const req = require('https').request({
+    const httpModule = parsed.protocol === 'http:' ? require('http') : require('https');
+    const req = httpModule.request({
       hostname: parsed.hostname,
-      port: parsed.port || 443,
+      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: Object.assign({}, extraHeaders),
@@ -79,7 +81,7 @@ class SocketManager {
   connect() {
     return new Promise((resolve, reject) => {
       const io = require('socket.io-client');
-      const url = 'https://www.overleaf.com';
+      const url = process.env.OVERLEAF_URL || 'https://www.overleaf.com';
 
       // Connect with v2 scheme (projectId in query) - used by overleaf.com
       const queryUrl = `${url}?projectId=${this.projectId}&t=${Date.now()}`;
