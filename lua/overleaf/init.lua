@@ -6,21 +6,24 @@ local buffer = require('overleaf.buffer')
 
 local M = {}
 
---- Get the system command to open a file (respects pdf_viewer config)
+--- Open a file with the configured viewer or platform default
 ---@param file_path string
----@return string[]
-local function open_cmd(file_path)
+local function open_file(file_path)
   local viewer = config.get().pdf_viewer
   if viewer then
-    return { viewer, file_path }
-  end
-  -- Auto-detect by platform
-  if vim.fn.has('mac') == 1 then
-    return { 'open', file_path }
-  elseif vim.fn.has('wsl') == 1 then
-    return { 'wslview', file_path }
+    -- User-configured viewer: open in terminal split (supports TUI viewers like tdf)
+    vim.cmd('split | terminal ' .. vim.fn.shellescape(viewer) .. ' ' .. vim.fn.shellescape(file_path))
   else
-    return { 'xdg-open', file_path }
+    -- Auto-detect platform launcher (runs in background)
+    local cmd
+    if vim.fn.has('mac') == 1 then
+      cmd = { 'open', file_path }
+    elseif vim.fn.has('wsl') == 1 then
+      cmd = { 'wslview', file_path }
+    else
+      cmd = { 'xdg-open', file_path }
+    end
+    vim.fn.system(cmd)
   end
 end
 
@@ -640,7 +643,7 @@ function M.preview_file()
       end
       config.log('info', 'Opening %s', result.path)
       vim.schedule(function()
-        vim.fn.system(open_cmd(result.path))
+        open_file(result.path)
       end)
     end)
   end)
@@ -1045,7 +1048,7 @@ function M._open_pdf(output_files)
       return
     end
     vim.schedule(function()
-      vim.fn.system(open_cmd(result.path))
+      open_file(result.path)
     end)
   end)
 end
