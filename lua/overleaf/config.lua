@@ -4,6 +4,8 @@ M._config = {
   env_file = '.env',
   cookie = nil,
   node_path = 'node',
+  base_url = 'https://www.overleaf.com', -- Overleaf instance URL (for self-hosted)
+  pdf_viewer = nil, -- PDF viewer command (nil = auto-detect: 'open' on macOS, 'xdg-open' on Linux)
   log_level = 'info', -- 'debug', 'info', 'warn', 'error'
 }
 

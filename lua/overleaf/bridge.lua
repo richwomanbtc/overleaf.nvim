@@ -19,7 +19,15 @@ function M.start(callback)
   local script = config.bridge_script()
   local node = config.get().node_path
 
+  -- Pass base_url to bridge as OVERLEAF_URL environment variable
+  local env = nil
+  local base_url = config.get().base_url
+  if base_url and base_url ~= 'https://www.overleaf.com' then
+    env = { OVERLEAF_URL = base_url }
+  end
+
   M._job_id = vim.fn.jobstart({ node, script }, {
+    env = env,
     on_stdout = function(_, data, _)
       M._on_stdout(data)
     end,

@@ -6,6 +6,24 @@ local buffer = require('overleaf.buffer')
 
 local M = {}
 
+--- Get the system command to open a file (respects pdf_viewer config)
+---@param file_path string
+---@return string[]
+local function open_cmd(file_path)
+  local viewer = config.get().pdf_viewer
+  if viewer then
+    return { viewer, file_path }
+  end
+  -- Auto-detect by platform
+  if vim.fn.has('mac') == 1 then
+    return { 'open', file_path }
+  elseif vim.fn.has('wsl') == 1 then
+    return { 'wslview', file_path }
+  else
+    return { 'xdg-open', file_path }
+  end
+end
+
 M._state = {
   connected = false,
   project_name = nil,
@@ -622,7 +640,7 @@ function M.preview_file()
       end
       config.log('info', 'Opening %s', result.path)
       vim.schedule(function()
-        vim.fn.system({ 'open', result.path })
+        vim.fn.system(open_cmd(result.path))
       end)
     end)
   end)
@@ -1019,7 +1037,7 @@ function M._open_pdf(output_files)
 
   bridge.request('downloadUrl', {
     cookie = config.get().cookie,
-    url = 'https://www.overleaf.com' .. pdf_file.url,
+    url = config.get().base_url .. pdf_file.url,
     fileName = (M._state.project_name or 'output') .. '.pdf',
   }, function(err, result)
     if err then
@@ -1027,7 +1045,7 @@ function M._open_pdf(output_files)
       return
     end
     vim.schedule(function()
-      vim.fn.system({ 'open', result.path })
+      vim.fn.system(open_cmd(result.path))
     end)
   end)
 end

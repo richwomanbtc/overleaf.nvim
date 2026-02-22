@@ -126,7 +126,15 @@ async function getOverleafCookie(profileDir) {
   fs.copyFileSync(cookiesDb, tmpDb);
 
   try {
-    const query = `SELECT name, hex(encrypted_value) FROM cookies WHERE host_key LIKE '%overleaf.com' AND name = 'overleaf_session2' ORDER BY expires_utc DESC LIMIT 1;`;
+    // Extract domain from OVERLEAF_URL for self-hosted instances
+    let cookieDomain = 'overleaf.com';
+    if (process.env.OVERLEAF_URL) {
+      try {
+        const parsedUrl = new URL(process.env.OVERLEAF_URL);
+        cookieDomain = parsedUrl.hostname;
+      } catch (e) { /* keep default */ }
+    }
+    const query = `SELECT name, hex(encrypted_value) FROM cookies WHERE host_key LIKE '%${cookieDomain}' AND name = 'overleaf_session2' ORDER BY expires_utc DESC LIMIT 1;`;
     const result = execSync(
       `sqlite3 "${tmpDb}" "${query}"`,
       { encoding: 'utf-8' }
