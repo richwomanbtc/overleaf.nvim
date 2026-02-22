@@ -19,12 +19,13 @@ function M.create(doc, lines)
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.bo[bufnr].modified = false
 
-  -- Clear undo history so 'u' doesn't wipe the buffer after initial load
+  -- Clear undo history so 'u' doesn't wipe the buffer after initial load.
+  -- Uses API calls instead of 'exe "normal a \<BS>\<Esc>"' to avoid
+  -- literal garbage insertion when special keys aren't interpreted (Issue #5).
   local old_undolevels = vim.bo[bufnr].undolevels
   vim.bo[bufnr].undolevels = -1
-  vim.api.nvim_buf_call(bufnr, function()
-    vim.cmd("exe 'normal a \\<BS>\\<Esc>'")
-  end)
+  vim.api.nvim_buf_set_text(bufnr, 0, 0, 0, 0, { ' ' })
+  vim.api.nvim_buf_set_text(bufnr, 0, 0, 0, 1, { '' })
   vim.bo[bufnr].undolevels = old_undolevels
   vim.bo[bufnr].modified = false
 
