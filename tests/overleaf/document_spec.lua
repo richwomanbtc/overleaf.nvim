@@ -3,9 +3,7 @@ local _ = require('overleaf.ot')
 -- Stub overleaf.bridge so Document.new doesn't try real connections
 package.loaded['overleaf.bridge'] = {
   request = function(_, _, cb)
-    if cb then
-      cb({ message = 'stub' })
-    end
+    if cb then cb({ message = 'stub' }) end
   end,
 }
 
@@ -198,12 +196,7 @@ describe('document', function()
       doc.server_content = 'Hello World'
 
       local applied_ops = nil
-      doc:on_remote_op(
-        { v = 5, op = { { p = 5, i = ' Beautiful' } } },
-        function(ops)
-          applied_ops = ops
-        end
-      )
+      doc:on_remote_op({ v = 5, op = { { p = 5, i = ' Beautiful' } } }, function(ops) applied_ops = ops end)
 
       assert.are.equal(6, doc.version)
       assert.are.equal('Hello Beautiful World', doc.content)
@@ -219,10 +212,7 @@ describe('document', function()
       doc.content = 'Hello Beautiful World'
       doc.server_content = 'Hello Beautiful World'
 
-      doc:on_remote_op(
-        { v = 5, op = { { p = 5, d = ' Beautiful' } } },
-        function() end
-      )
+      doc:on_remote_op({ v = 5, op = { { p = 5, d = ' Beautiful' } } }, function() end)
 
       assert.are.equal('Hello World', doc.content)
       assert.are.equal('Hello World', doc.server_content)
@@ -239,12 +229,7 @@ describe('document', function()
 
       local applied_ops = nil
       -- Remote: insert 'Z' at position 5 (server doesn't know about XY yet)
-      doc:on_remote_op(
-        { v = 5, op = { { p = 5, i = 'Z' } } },
-        function(ops)
-          applied_ops = ops
-        end
-      )
+      doc:on_remote_op({ v = 5, op = { { p = 5, i = 'Z' } } }, function(ops) applied_ops = ops end)
 
       -- Remote 'Z' should be shifted past our 'XY' insertion
       assert.are.equal(6, doc.version)
@@ -263,12 +248,7 @@ describe('document', function()
       doc.pending_ops = { { p = 5, i = 'AB' } }
 
       local applied_ops = nil
-      doc:on_remote_op(
-        { v = 5, op = { { p = 5, i = 'Z' } } },
-        function(ops)
-          applied_ops = ops
-        end
-      )
+      doc:on_remote_op({ v = 5, op = { { p = 5, i = 'Z' } } }, function(ops) applied_ops = ops end)
 
       assert.are.equal(6, doc.version)
       assert.is_not_nil(applied_ops)
@@ -283,12 +263,7 @@ describe('document', function()
       doc.content = 'Hello'
       doc.server_content = 'Hello'
 
-      doc:on_remote_op(
-        { v = 5, op = { { p = 0, i = 'X' } } },
-        function()
-          error('should not be called')
-        end
-      )
+      doc:on_remote_op({ v = 5, op = { { p = 0, i = 'X' } } }, function() error('should not be called') end)
 
       assert.are.equal(5, doc.version)
       assert.are.equal('Hello', doc.content)
@@ -302,12 +277,7 @@ describe('document', function()
       doc.server_content = 'Hello'
 
       local called = false
-      doc:on_remote_op(
-        { v = 5, op = {} },
-        function()
-          called = true
-        end
-      )
+      doc:on_remote_op({ v = 5, op = {} }, function() called = true end)
 
       assert.is_false(called)
       assert.are.equal(5, doc.version)

@@ -17,14 +17,10 @@ function M.setup(opts)
   end
 end
 
-function M.get()
-  return M._config
-end
+function M.get() return M._config end
 
 function M.load_cookie()
-  if M._config.cookie then
-    return M._config.cookie
-  end
+  if M._config.cookie then return M._config.cookie end
 
   local env_file = M._config.env_file
   local paths
@@ -65,9 +61,7 @@ function M.plugin_root()
   return vim.fn.fnamemodify(source, ':h:h:h')
 end
 
-function M.bridge_script()
-  return M.plugin_root() .. '/node/bridge.js'
-end
+function M.bridge_script() return M.plugin_root() .. '/node/bridge.js' end
 
 function M.log(level, msg, ...)
   local levels = { debug = 0, info = 1, warn = 2, error = 3 }

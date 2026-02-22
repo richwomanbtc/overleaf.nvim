@@ -11,11 +11,11 @@ function Document.new(doc_id, path)
   self.path = path
   self.bufnr = nil
   self.version = nil
-  self.content = nil         -- local content (includes unacked changes)
-  self.server_content = nil  -- content at doc.version (server's view)
+  self.content = nil -- local content (includes unacked changes)
+  self.server_content = nil -- content at doc.version (server's view)
   self.joined = false
-  self.inflight_op = nil     -- op sent, awaiting ACK
-  self.pending_ops = nil     -- local ops not yet sent
+  self.inflight_op = nil -- op sent, awaiting ACK
+  self.pending_ops = nil -- local ops not yet sent
   self.applying_remote = false
   self._flush_timer = nil
   return self
@@ -74,22 +74,16 @@ function Document:submit_op(ops)
 end
 
 function Document:_schedule_flush()
-  if self._flush_timer then
-    vim.fn.timer_stop(self._flush_timer)
-  end
+  if self._flush_timer then vim.fn.timer_stop(self._flush_timer) end
   self._flush_timer = vim.fn.timer_start(100, function()
     self._flush_timer = nil
-    if self.joined and not self._rejoining then
-      self:flush()
-    end
+    if self.joined and not self._rejoining then self:flush() end
   end)
 end
 
 function Document:flush()
   if not self.joined or self._rejoining then return end
-  if self.inflight_op or not self.pending_ops then
-    return
-  end
+  if self.inflight_op or not self.pending_ops then return end
 
   -- Pre-flight check: verify buffer and doc.content are in sync
   if not self:check_content() then
@@ -125,9 +119,7 @@ function Document:_on_ack()
   config.log('debug', 'ACK received for %s, now v%d', self.path, self.version)
 
   -- Flush next pending if any
-  if self.pending_ops then
-    self:flush()
-  end
+  if self.pending_ops then self:flush() end
 end
 
 --- Rejoin document to resync state (e.g., after version mismatch or restore)
@@ -152,8 +144,7 @@ function Document:rejoin(attempt)
 
     bridge.request('joinDoc', { docId = self.doc_id }, function(err, result)
       if err then
-        config.log('warn', 'joinDoc failed for %s (attempt %d): %s',
-          self.path, attempt, vim.inspect(err))
+        config.log('warn', 'joinDoc failed for %s (attempt %d): %s', self.path, attempt, vim.inspect(err))
         if attempt < 5 then
           self:rejoin(attempt + 1)
         else
@@ -198,8 +189,13 @@ function Document:check_content()
   local buf_content = table.concat(lines, '\n')
 
   if buf_content ~= self.content then
-    config.log('warn', 'Content divergence detected in %s (buf=%d, doc=%d bytes) — rejoining',
-      self.path, #buf_content, #self.content)
+    config.log(
+      'warn',
+      'Content divergence detected in %s (buf=%d, doc=%d bytes) — rejoining',
+      self.path,
+      #buf_content,
+      #self.content
+    )
     self:rejoin()
     return false
   end
@@ -214,18 +210,13 @@ function Document:on_remote_op(update, apply_to_buffer)
 
   -- Version check — on mismatch, rejoin to resync
   if update.v ~= self.version then
-    config.log('debug', 'Version mismatch: expected %d, got %d for %s',
-      self.version, update.v, self.path)
-    if require('overleaf')._state.connected then
-      self:rejoin()
-    end
+    config.log('debug', 'Version mismatch: expected %d, got %d for %s', self.version, update.v, self.path)
+    if require('overleaf')._state.connected then self:rejoin() end
     return
   end
 
   local remote_ops = update.op or {}
-  if #remote_ops == 0 then
-    return
-  end
+  if #remote_ops == 0 then return end
 
   -- Wrap entire OT processing in pcall — rejoin on any failure
   local ok, err = pcall(function()
@@ -247,9 +238,7 @@ function Document:on_remote_op(update, apply_to_buffer)
     self.version = self.version + 1
     self.content = ot.apply(self.content, ops_to_apply)
 
-    if apply_to_buffer then
-      apply_to_buffer(ops_to_apply)
-    end
+    if apply_to_buffer then apply_to_buffer(ops_to_apply) end
   end)
 
   if not ok then

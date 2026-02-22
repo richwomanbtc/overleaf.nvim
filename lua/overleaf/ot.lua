@@ -271,12 +271,8 @@ function M.pos_to_byte_offset(content, row, col)
   local offset = 0
 
   for i = 1, #content do
-    if current_row == row then
-      return offset + col
-    end
-    if content:byte(i) == 10 then
-      current_row = current_row + 1
-    end
+    if current_row == row then return offset + col end
+    if content:byte(i) == 10 then current_row = current_row + 1 end
     offset = offset + 1
   end
 
