@@ -364,6 +364,66 @@ function createServer(port) {
   });
 }
 
+// ── Server-side event simulation ───────────────────────────────────────
+
+/**
+ * Broadcast an event to all connected clients using positional args.
+ * Socket.IO v0.9 events use positional arguments, not a single data object.
+ * @param {string} name - Event name
+ * @param {...any} args - Positional arguments for the event
+ */
+function broadcastEvent(name, ...args) {
+  for (const client of clients) {
+    client.sendEvent(name, ...args);
+  }
+}
+
+/**
+ * Simulate a history restore: removes old doc and creates a new one.
+ *
+ * Sequence (matches real Overleaf behavior):
+ *   1. Send `removeEntity` with meta.kind='file-restore'
+ *   2. Create new doc in store
+ *   3. Send `reciveNewDoc` with meta.kind='file-restore' and new doc info
+ *
+ * Real Overleaf event signatures:
+ *   removeEntity(entityId, meta)
+ *   reciveNewDoc(parentFolderId, doc, meta, userId)
+ *
+ * @param {string} oldDocId - The doc ID being replaced
+ * @param {string} newDocId - The new doc ID after restore
+ * @param {string} docName - Document filename (e.g. 'main.tex')
+ * @param {string} docPath - Document path (e.g. '/main.tex')
+ * @param {string[]} newLines - Content lines for the restored document
+ * @param {string} parentFolderId - Parent folder ID
+ * @returns {Promise} Resolves after the reciveNewDoc event is sent
+ */
+function simulateRestore(oldDocId, newDocId, docName, docPath, newLines, parentFolderId) {
+  parentFolderId = parentFolderId || 'root_folder';
+
+  // Step 1: Send removeEntity(entityId, meta)
+  broadcastEvent('removeEntity',
+    oldDocId,
+    { kind: 'file-restore', path: docPath }
+  );
+
+  // Step 2: Create the new doc in the store
+  getOrCreateDoc(newDocId, newLines);
+
+  // Step 3: Send reciveNewDoc(parentFolderId, doc, meta, userId) after a small delay
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      broadcastEvent('reciveNewDoc',
+        parentFolderId,
+        { _id: newDocId, name: docName },
+        { kind: 'file-restore', path: docPath },
+        'mock_user_restore'
+      );
+      resolve();
+    }, 50);
+  });
+}
+
 // If run directly, start server
 if (require.main === module) {
   const port = parseInt(process.env.MOCK_PORT || '18080', 10);
@@ -374,4 +434,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, getOrCreateDoc, resetDocs };
+module.exports = { createServer, getOrCreateDoc, resetDocs, broadcastEvent, simulateRestore };

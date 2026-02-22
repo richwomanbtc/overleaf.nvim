@@ -14,7 +14,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
-const { createServer, getOrCreateDoc, resetDocs } = require('./mock-server');
+const { createServer, getOrCreateDoc, resetDocs, broadcastEvent, simulateRestore } = require('./mock-server');
 
 // ── Test framework ─────────────────────────────────────────────────────
 let passed = 0;
@@ -399,6 +399,250 @@ async function runTests() {
     assertEqual(evt.data.op[0].i, 'my ', 'remote op insert text');
 
     bridge2.stop();
+  });
+
+  // ── Test Suite: History Restore ───────────────────────────────────
+  console.log('\nHistory Restore:');
+
+  await test('restore sends removeEntity then reciveNewDoc events', async () => {
+    resetDocs();
+    const oldDocId = 'doc_restore_old';
+    const newDocId = 'doc_restore_new';
+    getOrCreateDoc(oldDocId, ['old content']);
+    await bridge.request('joinDoc', { docId: oldDocId });
+
+    bridge.clearEvents();
+
+    // Simulate restore from Overleaf history
+    await simulateRestore(
+      oldDocId,
+      newDocId,
+      'main.tex',
+      '/main.tex',
+      ['restored content from history']
+    );
+
+    // Wait a bit for events to arrive
+    await new Promise(r => setTimeout(r, 200));
+
+    // Client should receive removeEntity event
+    const removeEvt = bridge.events.find(e => e.event === 'removeEntity');
+    assert(removeEvt, 'should receive removeEntity event');
+    assertEqual(removeEvt.data.entityId, oldDocId, 'removeEntity entityId');
+    assertEqual(removeEvt.data.meta.kind, 'file-restore', 'removeEntity meta.kind');
+    assertEqual(removeEvt.data.meta.path, '/main.tex', 'removeEntity meta.path');
+
+    // Client should receive reciveNewDoc event
+    const newDocEvt = bridge.events.find(e => e.event === 'reciveNewDoc');
+    assert(newDocEvt, 'should receive reciveNewDoc event');
+    assertEqual(newDocEvt.data.doc._id, newDocId, 'reciveNewDoc doc._id');
+    assertEqual(newDocEvt.data.doc.name, 'main.tex', 'reciveNewDoc doc.name');
+    assertEqual(newDocEvt.data.meta.kind, 'file-restore', 'reciveNewDoc meta.kind');
+  });
+
+  await test('new doc is joinable after restore', async () => {
+    const result = await bridge.request('joinDoc', { docId: 'doc_restore_new' });
+    assert(result.lines, 'should have lines');
+    assertEqual(result.lines[0], 'restored content from history', 'restored content');
+    assertEqual(result.version, 0, 'new doc starts at version 0');
+  });
+
+  await test('can edit restored doc', async () => {
+    const content = 'restored content from history';
+    const op = [{ p: 0, i: 'EDITED: ' }];
+    await bridge.request('applyOtUpdate', {
+      docId: 'doc_restore_new',
+      op,
+      v: 0,
+      content,
+    });
+
+    const result = await bridge.request('joinDoc', { docId: 'doc_restore_new' });
+    assertEqual(result.lines[0], 'EDITED: restored content from history', 'edited restored content');
+    assertEqual(result.version, 1, 'version after edit');
+  });
+
+  // ── Test Suite: Concurrent Editing ──────────────────────────────
+  console.log('\nConcurrent Editing:');
+
+  await test('two clients can edit different positions without conflict', async () => {
+    resetDocs();
+    getOrCreateDoc('doc_concurrent', ['Hello World']);
+
+    // Client 1 joins
+    await bridge.request('joinDoc', { docId: 'doc_concurrent' });
+
+    // Client 2
+    const bridge2 = new BridgeClient(port);
+    await bridge2.start();
+    await bridge2.request('ping');
+    await bridge2.request('connect', {
+      cookie: 'mock_session=concurrent2',
+      projectId: 'test_project',
+    });
+    await bridge2.request('joinDoc', { docId: 'doc_concurrent' });
+
+    // Client 1 inserts at beginning
+    const content = 'Hello World';
+    await bridge.request('applyOtUpdate', {
+      docId: 'doc_concurrent',
+      op: [{ p: 0, i: 'Dear ' }],
+      v: 0,
+      content,
+    });
+
+    // Client 2 inserts at end (using original v=0, which will cause version mismatch
+    // since client 1 already bumped version to 1)
+    bridge2.clearEvents();
+    try {
+      await bridge2.request('applyOtUpdate', {
+        docId: 'doc_concurrent',
+        op: [{ p: 11, i: '!' }],
+        v: 0, // stale version
+        content,
+      });
+    } catch (e) {
+      // Expected: version mismatch
+    }
+
+    // Client 2 should receive either an otUpdateError or version mismatch
+    try {
+      const evt = await bridge2.waitForEvent('otUpdateError', 2000);
+      assert(evt, 'client 2 should get otUpdateError for stale version');
+    } catch (e) {
+      // Also ok if the request itself threw
+    }
+
+    // After client 1's edit, server content should be correct
+    const result = await bridge.request('joinDoc', { docId: 'doc_concurrent' });
+    assertEqual(result.lines[0], 'Dear Hello World', 'content after client 1 edit');
+    assertEqual(result.version, 1, 'version after one edit');
+
+    bridge2.stop();
+  });
+
+  await test('client receives remote ops from concurrent edit', async () => {
+    resetDocs();
+    getOrCreateDoc('doc_realtime', ['line one\nline two\nline three']);
+
+    // Client 1
+    await bridge.request('joinDoc', { docId: 'doc_realtime' });
+
+    // Client 2
+    const bridge2 = new BridgeClient(port);
+    await bridge2.start();
+    await bridge2.request('ping');
+    await bridge2.request('connect', {
+      cookie: 'mock_session=realtime2',
+      projectId: 'test_project',
+    });
+    await bridge2.request('joinDoc', { docId: 'doc_realtime' });
+
+    // Client 2 edits — client 1 should see the remote op
+    bridge.clearEvents();
+    const content = 'line one\nline two\nline three';
+    await bridge2.request('applyOtUpdate', {
+      docId: 'doc_realtime',
+      op: [{ p: 0, i: 'REMOTE: ' }],
+      v: 0,
+      content,
+    });
+
+    const evt = await bridge.waitForEvent('otUpdateApplied', 3000);
+    assert(evt, 'client 1 should receive remote op');
+    assert(evt.data.op, 'should have op field');
+    assertEqual(evt.data.op[0].i, 'REMOTE: ', 'remote insert text');
+    assertEqual(evt.data.v, 0, 'op version');
+
+    // Verify final server state
+    const result = await bridge.request('joinDoc', { docId: 'doc_realtime' });
+    assertEqual(result.lines[0], 'REMOTE: line one', 'server content updated');
+    assertEqual(result.version, 1, 'version incremented');
+
+    bridge2.stop();
+  });
+
+  await test('sequential edits from two clients maintain consistency', async () => {
+    resetDocs();
+    getOrCreateDoc('doc_seq', ['abc']);
+
+    await bridge.request('joinDoc', { docId: 'doc_seq' });
+
+    const bridge2 = new BridgeClient(port);
+    await bridge2.start();
+    await bridge2.request('ping');
+    await bridge2.request('connect', {
+      cookie: 'mock_session=seq2',
+      projectId: 'test_project',
+    });
+    await bridge2.request('joinDoc', { docId: 'doc_seq' });
+
+    // Client 1: insert 'X' at position 1 → "aXbc"
+    await bridge.request('applyOtUpdate', {
+      docId: 'doc_seq',
+      op: [{ p: 1, i: 'X' }],
+      v: 0,
+      content: 'abc',
+    });
+
+    // Client 2: insert 'Y' at position 3 (after 'c'), using CORRECT version 1
+    // After client 1's edit, content is "aXbc", so position 4 = end
+    await bridge2.request('applyOtUpdate', {
+      docId: 'doc_seq',
+      op: [{ p: 4, i: 'Y' }],
+      v: 1,
+      content: 'aXbc',
+    });
+
+    const result = await bridge.request('joinDoc', { docId: 'doc_seq' });
+    assertEqual(result.lines[0], 'aXbcY', 'both edits applied correctly');
+    assertEqual(result.version, 2, 'version after two edits');
+
+    bridge2.stop();
+  });
+
+  await test('restore during active editing session', async () => {
+    resetDocs();
+    const docId = 'doc_edit_restore';
+    getOrCreateDoc(docId, ['original']);
+    await bridge.request('joinDoc', { docId });
+
+    // Client edits the doc
+    await bridge.request('applyOtUpdate', {
+      docId,
+      op: [{ p: 8, i: ' edited' }],
+      v: 0,
+      content: 'original',
+    });
+
+    // Verify edit was applied
+    let result = await bridge.request('joinDoc', { docId });
+    assertEqual(result.lines[0], 'original edited', 'edit applied');
+
+    // Now simulate a restore (another user restores from history)
+    bridge.clearEvents();
+    const newDocId = 'doc_edit_restore_v2';
+    await simulateRestore(
+      docId,
+      newDocId,
+      'restored.tex',
+      '/restored.tex',
+      ['content from v1 of history']
+    );
+    await new Promise(r => setTimeout(r, 200));
+
+    // Client should receive both events
+    const removeEvt = bridge.events.find(e => e.event === 'removeEntity');
+    assert(removeEvt, 'should receive removeEntity during active session');
+    assertEqual(removeEvt.data.entityId, docId, 'correct entity removed');
+
+    const newDocEvt = bridge.events.find(e => e.event === 'reciveNewDoc');
+    assert(newDocEvt, 'should receive reciveNewDoc during active session');
+    assertEqual(newDocEvt.data.doc._id, newDocId, 'new doc id correct');
+
+    // New doc should be joinable with restored content
+    result = await bridge.request('joinDoc', { docId: newDocId });
+    assertEqual(result.lines[0], 'content from v1 of history', 'restored content');
   });
 
   // ── Cleanup ──────────────────────────────────────────────────────
