@@ -645,6 +645,145 @@ async function runTests() {
     assertEqual(result.lines[0], 'content from v1 of history', 'restored content');
   });
 
+  // ── Test Suite: File Tree Events ─────────────────────────────────
+  console.log('\nFile Tree Events:');
+
+  await test('reciveNewFile event is forwarded correctly', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: reciveNewFile(parentFolderId, file, meta, userId)
+    broadcastEvent('reciveNewFile',
+      'root_folder',
+      { _id: 'file_img1', name: 'figure.png' },
+      {},
+      'mock_user_1'
+    );
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'reciveNewFile');
+    assert(evt, 'should receive reciveNewFile event');
+    assertEqual(evt.data.file._id, 'file_img1', 'file id');
+    assertEqual(evt.data.file.name, 'figure.png', 'file name');
+    assertEqual(evt.data.parentFolderId, 'root_folder', 'parent folder');
+  });
+
+  await test('removeEntity event (normal, non-restore) is forwarded', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: removeEntity(entityId, meta)
+    broadcastEvent('removeEntity',
+      'doc_to_delete',
+      {}
+    );
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'removeEntity');
+    assert(evt, 'should receive removeEntity event');
+    assertEqual(evt.data.entityId, 'doc_to_delete', 'entity id');
+  });
+
+  await test('rootDocUpdated event is forwarded', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: rootDocUpdated(newRootDocId)
+    broadcastEvent('rootDocUpdated', 'new_root_doc_id');
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'rootDocUpdated');
+    assert(evt, 'should receive rootDocUpdated event');
+    assertEqual(evt.data.docId, 'new_root_doc_id', 'new root doc id');
+  });
+
+  // ── Test Suite: Comment Events ─────────────────────────────────
+  console.log('\nComment Events:');
+
+  await test('new-comment event is forwarded as newComment', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: new-comment(threadId, comment)
+    broadcastEvent('new-comment',
+      'thread_abc123',
+      { id: 'comment_1', content: 'Great work!', user_id: 'user_42', timestamp: '2026-01-01T00:00:00Z' }
+    );
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'newComment');
+    assert(evt, 'should receive newComment event');
+    assertEqual(evt.data.threadId, 'thread_abc123', 'thread id');
+    assertEqual(evt.data.comment.content, 'Great work!', 'comment content');
+    assertEqual(evt.data.comment.id, 'comment_1', 'comment id');
+  });
+
+  await test('resolve-thread event is forwarded as resolveThread', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: resolve-thread(threadId, user)
+    broadcastEvent('resolve-thread',
+      'thread_abc123',
+      { id: 'user_42', first_name: 'Test', email: 'test@example.com' }
+    );
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'resolveThread');
+    assert(evt, 'should receive resolveThread event');
+    assertEqual(evt.data.threadId, 'thread_abc123', 'thread id');
+    assertEqual(evt.data.user.id, 'user_42', 'user id');
+  });
+
+  await test('reopen-thread event is forwarded as reopenThread', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: reopen-thread(threadId)
+    broadcastEvent('reopen-thread', 'thread_abc123');
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'reopenThread');
+    assert(evt, 'should receive reopenThread event');
+    assertEqual(evt.data.threadId, 'thread_abc123', 'thread id');
+  });
+
+  await test('delete-thread event is forwarded as deleteThread', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: delete-thread(threadId)
+    broadcastEvent('delete-thread', 'thread_abc123');
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'deleteThread');
+    assert(evt, 'should receive deleteThread event');
+    assertEqual(evt.data.threadId, 'thread_abc123', 'thread id');
+  });
+
+  // ── Test Suite: Collaborator Tracking ──────────────────────────
+  console.log('\nCollaborator Tracking:');
+
+  await test('clientTracking.clientUpdated is forwarded as clientUpdated', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: clientTracking.clientUpdated(user)
+    broadcastEvent('clientTracking.clientUpdated', {
+      id: 'client_99',
+      user_id: 'user_42',
+      name: 'Test User',
+      email: 'test@example.com',
+      row: 5,
+      column: 10,
+      doc_id: 'doc_main',
+    });
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'clientUpdated');
+    assert(evt, 'should receive clientUpdated event');
+    assertEqual(evt.data.id, 'client_99', 'client id');
+    assertEqual(evt.data.user_id, 'user_42', 'user id');
+    assertEqual(evt.data.row, 5, 'cursor row');
+    assertEqual(evt.data.column, 10, 'cursor column');
+    assertEqual(evt.data.doc_id, 'doc_main', 'doc id');
+  });
+
+  await test('clientTracking.clientDisconnected is forwarded as clientDisconnected', async () => {
+    bridge.clearEvents();
+    // Real Overleaf signature: clientTracking.clientDisconnected(id)
+    broadcastEvent('clientTracking.clientDisconnected', 'client_99');
+    await new Promise(r => setTimeout(r, 200));
+
+    const evt = bridge.events.find(e => e.event === 'clientDisconnected');
+    assert(evt, 'should receive clientDisconnected event');
+    assertEqual(evt.data.id, 'client_99', 'disconnected client id');
+  });
+
   // ── Cleanup ──────────────────────────────────────────────────────
   bridge.stop();
   await srv.close();
