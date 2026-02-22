@@ -816,7 +816,7 @@ function M.upload_file(file_path, parent_folder_id)
       filePath = path,
       fileName = file_name,
       parentFolderId = parent_folder_id,
-    }, function(err, result)
+    }, function(err, _result)
       if err then
         config.log('error', 'Upload failed: %s', err.message)
         return
@@ -1253,7 +1253,7 @@ function M.show_comment()
   config.log('debug', 'show_comment: doc=%s, threads=%d, doc_comments=%d',
     doc_id, thread_count, doc_comments and #doc_comments or 0)
 
-  local thread, c = comments.get_thread_at_cursor(doc_id, doc.content)
+  local thread, _ = comments.get_thread_at_cursor(doc_id, doc.content)
   if thread then
     comments.show_thread(thread)
   else
@@ -1403,7 +1403,7 @@ function M.disconnect()
   pcall(function() require('overleaf.comments').clear_all() end)
 
   -- Leave all documents
-  for doc_id, doc in pairs(M._state.documents) do
+  for _, doc in pairs(M._state.documents) do
     doc:leave(function()
       buffer.cleanup(doc)
     end)
@@ -1450,16 +1450,16 @@ function M.statusline()
     return ''
   end
 
-  local project = M._state.project_name or '?'
+  local proj = M._state.project_name or '?'
 
   -- Show current doc name if in an overleaf buffer
   local bufname = vim.api.nvim_buf_get_name(0)
   if bufname:match('^overleaf://') then
     local doc_path = bufname:gsub('^overleaf://', '')
-    return 'OL: ' .. project .. ' / ' .. doc_path
+    return 'OL: ' .. proj .. ' / ' .. doc_path
   end
 
-  return 'OL: ' .. project
+  return 'OL: ' .. proj
 end
 
 return M

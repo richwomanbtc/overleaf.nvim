@@ -113,7 +113,6 @@ function M.render(bufnr, doc_id, content)
 
   -- First pass: collect labels per start line, and highlight ranges
   local line_labels = {} -- start_line -> { label1, label2, ... }
-  local line_has_sign = {} -- track which lines need a sign
 
   for _, c in ipairs(comments) do
     local thread = M._threads[c.threadId]
@@ -126,7 +125,7 @@ function M.render(bufnr, doc_id, content)
       if end_line > line_count then end_line = line_count end
 
       -- Build label
-      local label = ''
+      local label
       if thread and thread.messages and #thread.messages > 0 then
         local msg = thread.messages[1]
         local user = msg.user and (msg.user.first_name or msg.user.email or '?') or '?'
@@ -142,7 +141,6 @@ function M.render(bufnr, doc_id, content)
         line_labels[start_line] = {}
       end
       table.insert(line_labels[start_line], label)
-      line_has_sign[start_line] = true
 
       -- Highlight the range (each comment gets its own highlight)
       pcall(function()
@@ -170,7 +168,7 @@ function M.render(bufnr, doc_id, content)
 end
 
 --- Get comment thread at cursor position
-function M.get_thread_at_cursor(doc_id, content)
+function M.get_thread_at_cursor(doc_id, _content)
   local cursor = vim.api.nvim_win_get_cursor(0)
   local cursor_line = cursor[1]
   local cursor_col = cursor[2]
@@ -260,7 +258,7 @@ function M.show_thread(thread)
 end
 
 --- Show all comments in quickfix
-function M.list_all(project_id)
+function M.list_all(_project_id)
   local qf_items = {}
 
   for doc_id, comments in pairs(M._doc_comments) do

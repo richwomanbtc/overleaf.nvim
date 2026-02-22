@@ -1,4 +1,4 @@
-local ot = require('overleaf.ot')
+local _ = require('overleaf.ot')
 
 -- Stub overleaf.bridge so Document.new doesn't try real connections
 package.loaded['overleaf.bridge'] = {

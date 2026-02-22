@@ -761,7 +761,6 @@ describe('buffer', function()
 
       -- The op is based on doc.content, not buffer
       assert.are.equal(1, #doc._submitted_ops)
-      local ops = doc._submitted_ops[1]
 
       -- byte_offset from buffer includes garbage offset
       -- byte_to_char maps this to wrong position in doc.content

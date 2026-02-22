@@ -74,6 +74,10 @@ function M.create(doc, lines)
     local ts_lang_map = { tex = 'latex', bib = 'bibtex' }
     local lang = ts_lang_map[ft_map[ext]] or ft_map[ext]
     vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+
       local ok = pcall(vim.treesitter.start, bufnr, lang)
       if not ok then
         pcall(vim.cmd, 'syntax enable')
@@ -162,9 +166,9 @@ end
 ---@param doc table Document instance
 function M.attach(bufnr, doc)
   vim.api.nvim_buf_attach(bufnr, false, {
-    on_bytes = function(_, buf, changedtick,
+    on_bytes = function(_, buf, _changedtick,
                         start_row, start_col, byte_offset,
-                        old_end_row, old_end_col, old_end_byte,
+                        _old_end_row, _old_end_col, old_end_byte,
                         new_end_row, new_end_col, new_end_byte)
 
       -- Guard: ignore changes triggered by applying remote ops
@@ -295,7 +299,7 @@ function M._run_chktex(bufnr)
         stdout_chunks = data
       end
     end,
-    on_exit = function(_, exit_code)
+    on_exit = function(_, _exit_code)
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(bufnr) then return end
 

@@ -1,4 +1,4 @@
-local config = require('overleaf.config')
+local _ = require('overleaf.config')
 
 local M = {}
 

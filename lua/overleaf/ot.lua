@@ -110,7 +110,6 @@ end
 function M.transform_component(c1, c2, side)
   -- c1 is insert
   if c1.i then
-    local c1_i_len = M.utf8_len(c1.i)
     if c2.i then
       -- Insert vs Insert
       local c2_i_len = M.utf8_len(c2.i)
