@@ -147,11 +147,10 @@ function M._on_enter()
     end
     -- Current window is now the editor — open_document sets buffer here
     require('overleaf').open_document(entry.id, entry.path)
-  elseif entry.type == 'folder' then
-    -- No-op for folders
   elseif entry.type == 'file' then
     config.log('info', 'Binary files cannot be opened: %s', entry.name)
   end
+  -- No-op for folders
 end
 
 --- Get the parent folder ID of the entry under cursor

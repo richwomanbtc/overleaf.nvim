@@ -44,7 +44,7 @@ function M.start(callback)
       M._job_id = nil
       M._started = false
       -- Notify pending requests of failure
-      for id, pending in pairs(M._pending) do
+      for _, pending in pairs(M._pending) do
         if pending.timer then
           vim.fn.timer_stop(pending.timer)
         end
@@ -77,7 +77,7 @@ function M.start(callback)
   config.log('info', 'Bridge started (job_id=%d)', M._job_id)
 
   -- Send a ping to verify bridge is ready
-  M.request('ping', {}, function(err, result)
+  M.request('ping', {}, function(err, _result)
     if callback then callback(err) end
   end)
 end
