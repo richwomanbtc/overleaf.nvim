@@ -128,12 +128,13 @@ const handlers = {
   },
 
   async downloadUrl(params) {
-    const { cookie, url, fileName } = params;
+    const { cookie, url, fileName, outputDir } = params;
     if (!cookie || !url) {
       throw { code: 'MISSING_PARAM', message: 'cookie and url are required' };
     }
 
-    const tmpPath = require('path').join(require('os').tmpdir(), 'overleaf_' + (fileName || 'download'));
+    const dir = outputDir || require('os').tmpdir();
+    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || 'download'));
     const fs = require('fs');
 
     await new Promise((resolve, reject) => {
@@ -156,13 +157,14 @@ const handlers = {
   },
 
   async downloadFile(params) {
-    const { cookie, projectId, fileId, fileName } = params;
+    const { cookie, projectId, fileId, fileName, outputDir } = params;
     if (!cookie || !projectId || !fileId) {
       throw { code: 'MISSING_PARAM', message: 'cookie, projectId, and fileId are required' };
     }
 
     const url = `${BASE_URL}/project/${projectId}/file/${fileId}`;
-    const tmpPath = require('path').join(require('os').tmpdir(), 'overleaf_' + (fileName || fileId));
+    const dir = outputDir || require('os').tmpdir();
+    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || fileId));
 
     // Download binary file
     const fs = require('fs');
