@@ -610,6 +610,7 @@ function M.preview_file()
       projectId = M._state.project_id,
       fileId = choice.id,
       fileName = choice.name,
+      outputDir = config.get().pdf_dir,
     }, function(err, result)
       if err then
         config.log('error', 'Download failed: %s', err.message)
@@ -1014,6 +1015,7 @@ function M._open_pdf(output_files)
     cookie = config.get().cookie,
     url = config.get().base_url .. pdf_file.url,
     fileName = (M._state.project_name or 'output') .. '.pdf',
+    outputDir = config.get().pdf_dir,
   }, function(err, result)
     if err then
       config.log('debug', 'PDF download failed: %s', err.message)
