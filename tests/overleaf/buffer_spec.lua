@@ -420,6 +420,205 @@ describe('buffer', function()
   end)
 
   -- ═══════════════════════════════════════════════════════════════════════
+  -- Line join operations (J, gJ, 3J)
+  --
+  -- These tests verify that on_bytes correctly handles line-join operations
+  -- which produce replace ops (delete newline+whitespace, insert space).
+  -- ═══════════════════════════════════════════════════════════════════════
+
+  describe('on_bytes line join', function()
+    it('J (join with space) generates correct delete+insert ops', function()
+      local content = 'Hello\n  World'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content, '\n', { plain = true }))
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Simulate J: delete "\n  " (newline + leading whitespace), insert " "
+      vim.api.nvim_buf_set_text(buf, 0, 5, 1, 2, { ' ' })
+
+      assert.are.equal(1, #doc._submitted_ops)
+      local ops = doc._submitted_ops[1]
+      assert.are.equal(2, #ops) -- delete + insert
+      assert.are.equal(5, ops[1].p)
+      assert.are.equal('\n  ', ops[1].d)
+      assert.are.equal(5, ops[2].p)
+      assert.are.equal(' ', ops[2].i)
+      assert.are.equal('Hello World', doc.content)
+
+      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      assert.are.equal(doc.content, table.concat(buf_lines, '\n'))
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it('gJ (join without space) generates delete op only', function()
+      local content = 'Hello\nWorld'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content, '\n', { plain = true }))
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Simulate gJ: delete "\n" only
+      vim.api.nvim_buf_set_text(buf, 0, 5, 1, 0, { '' })
+
+      assert.are.equal(1, #doc._submitted_ops)
+      local ops = doc._submitted_ops[1]
+      assert.are.equal(1, #ops) -- delete only
+      assert.are.equal(5, ops[1].p)
+      assert.are.equal('\n', ops[1].d)
+      assert.are.equal('HelloWorld', doc.content)
+
+      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      assert.are.equal(doc.content, table.concat(buf_lines, '\n'))
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it('J with leading whitespace collapses to single space', function()
+      local content = 'Line 1\n   Line 2'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content, '\n', { plain = true }))
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Simulate J: delete "\n   " (newline + 3 spaces), insert " "
+      vim.api.nvim_buf_set_text(buf, 0, 6, 1, 3, { ' ' })
+
+      assert.are.equal(1, #doc._submitted_ops)
+      local ops = doc._submitted_ops[1]
+      assert.are.equal(2, #ops)
+      assert.are.equal(6, ops[1].p)
+      assert.are.equal('\n   ', ops[1].d)
+      assert.are.equal(6, ops[2].p)
+      assert.are.equal(' ', ops[2].i)
+      assert.are.equal('Line 1 Line 2', doc.content)
+
+      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      assert.are.equal(doc.content, table.concat(buf_lines, '\n'))
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it('multi-line join (3J) generates sequential ops', function()
+      local content = 'Line 1\nLine 2\nLine 3'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content, '\n', { plain = true }))
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- First join: delete "\n", insert " "
+      vim.api.nvim_buf_set_text(buf, 0, 6, 1, 0, { ' ' })
+      -- Second join: delete "\n", insert " "
+      vim.api.nvim_buf_set_text(buf, 0, 13, 1, 0, { ' ' })
+
+      assert.are.equal(2, #doc._submitted_ops)
+      assert.are.equal('Line 1 Line 2 Line 3', doc.content)
+
+      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      assert.are.equal(doc.content, table.concat(buf_lines, '\n'))
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it('J on CJK lines generates correct multibyte ops', function()
+      local content = '日本語\n世界'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content, '\n', { plain = true }))
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Simulate gJ: delete "\n" only (CJK lines)
+      vim.api.nvim_buf_set_text(buf, 0, 9, 1, 0, { '' })
+
+      assert.are.equal(1, #doc._submitted_ops)
+      local ops = doc._submitted_ops[1]
+      assert.are.equal(3, ops[1].p) -- char offset after 3 CJK chars
+      assert.are.equal('\n', ops[1].d)
+      assert.are.equal('日本語世界', doc.content)
+
+      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      assert.are.equal(doc.content, table.concat(buf_lines, '\n'))
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+  end)
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- Error recovery (Fix 1-3)
+  --
+  -- Verify that on_bytes triggers rejoin when it detects inconsistencies
+  -- instead of sending wrong ops to the server.
+  -- ═══════════════════════════════════════════════════════════════════════
+
+  describe('on_bytes error recovery', function()
+    it('byte offset out of bounds triggers rejoin (Fix 1)', function()
+      local content = 'Short'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      -- Set buffer to longer content than doc.content
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'Much longer content' })
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Delete at byte offset that exceeds doc.content length
+      -- Buffer: "Much longer content" (19 bytes), doc: "Short" (5 bytes)
+      -- byte_offset=5, old_end_byte=7, 5+7=12 > 5
+      vim.api.nvim_buf_set_text(buf, 0, 5, 0, 12, { '' })
+
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(0, #doc._submitted_ops)
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it('insert-only past doc end triggers rejoin (Fix 1)', function()
+      local content = 'Hi'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'Hello World' })
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Insert at byte 11 in buffer, but doc is only 2 bytes
+      vim.api.nvim_buf_set_text(buf, 0, 11, 0, 11, { '!' })
+
+      -- byte_offset=11 > #doc.content=2 → rejoin
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(0, #doc._submitted_ops)
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it('normal replace works correctly with pcall protection (Fix 2-3)', function()
+      local content = 'Hello World'
+      local doc = make_doc(content)
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, { content })
+      doc.bufnr = buf
+      buffer.attach(buf, doc)
+
+      -- Normal replace: should work fine with new atomic ops + pcall
+      vim.api.nvim_buf_set_text(buf, 0, 6, 0, 11, { 'Lua' })
+
+      assert.is_false(doc._rejoin_called)
+      assert.are.equal(1, #doc._submitted_ops)
+      local ops = doc._submitted_ops[1]
+      assert.are.equal(2, #ops)
+      assert.are.equal('World', ops[1].d)
+      assert.are.equal('Lua', ops[2].i)
+      assert.are.equal('Hello Lua', doc.content)
+
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+  end)
+
+  -- ═══════════════════════════════════════════════════════════════════════
   -- Issue #6: Content divergence edge cases
   --
   -- These tests verify what happens when doc.content and buffer have
@@ -489,21 +688,18 @@ describe('buffer', function()
       vim.api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it('wrong delete text: buffer has extra content doc does not know', function()
-      -- Buffer: "Hello Beautiful World"
-      -- doc:    "Hello World"           (missing " Beautiful")
+    it('wrong delete text: buffer has extra content triggers rejoin (Fix 1)', function()
+      -- Buffer: "Hello Beautiful World"  (21 bytes)
+      -- doc:    "Hello World"            (11 bytes, missing " Beautiful")
       local doc, buf = make_diverged('Hello Beautiful World', 'Hello World')
 
       -- Delete " Beautiful" from buffer (byte 5 to 15, 10 bytes)
+      -- on_bytes: byte_offset=5, old_end_byte=10, 5+10=15 > 11 → out of bounds
       vim.api.nvim_buf_set_text(buf, 0, 5, 0, 15, { '' })
 
-      assert.are.equal(1, #doc._submitted_ops)
-      local ops = doc._submitted_ops[1]
-      -- on_bytes: byte_offset=5, old_end_byte=10
-      -- doc.content:sub(6, 15) = " World" (reads past what was actually deleted)
-      -- Server receives delete of " World" instead of " Beautiful"!
-      assert.are.equal(' World', ops[1].d) -- WRONG: wrong text sent to server
-      assert.are_not.equal(' Beautiful', ops[1].d)
+      -- Fix 1: boundary check detects offset out of bounds, triggers rejoin
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(0, #doc._submitted_ops) -- no wrong ops sent
 
       vim.api.nvim_buf_delete(buf, { force = true })
     end)
@@ -532,77 +728,62 @@ describe('buffer', function()
 
     -- ── Offset out of bounds when buffer is larger than doc ─────────
 
-    it('byte offset exceeds doc length: edit silently dropped', function()
+    it('byte offset exceeds doc length: triggers rejoin (Fix 1)', function()
       -- Buffer: "EXTRA LINE\nHello\nWorld"  (22 bytes)
       -- doc:    "Hello\nWorld"               (11 bytes)
       local doc, buf = make_diverged('EXTRA LINE\nHello\nWorld', 'Hello\nWorld')
 
       -- Delete "Hello" on line 2 of buffer (byte offset from buffer = 11)
+      -- on_bytes: byte_offset=11, old_end_byte=5, 11+5=16 > 11 → out of bounds
       vim.api.nvim_buf_set_text(buf, 1, 0, 1, 5, { '' })
 
-      -- byte_offset=11 >= #doc.content (11 bytes)
-      -- doc.content:sub(12, 16) = "" (past end!)
-      -- deleted_text is empty → no delete op generated
-      -- No insert either (replacement was '') → ops is empty
-      -- THE ENTIRE EDIT IS SILENTLY LOST — never sent to server!
-      assert.are.equal(0, #doc._submitted_ops) -- no ops submitted at all
-
-      -- Buffer changed but doc.content didn't — silent divergence
-      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-      local buf_content = table.concat(buf_lines, '\n')
-      assert.are.equal('Hello\nWorld', doc.content) -- unchanged
-      assert.are.equal('EXTRA LINE\n\nWorld', buf_content) -- changed
+      -- Fix 1: boundary check triggers rejoin instead of silent drop
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(0, #doc._submitted_ops)
 
       vim.api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it('CJK in buffer vs ASCII in doc: offset maps to wrong char', function()
+    it('CJK in buffer vs ASCII in doc: triggers rejoin (Fix 1)', function()
       -- Buffer: "日本語ABC"  (9 + 3 = 12 bytes)
       -- doc:    "XXXXABC"    (7 bytes)
-      -- 'A' is at byte 9 in buffer but byte 4 in doc
       local doc, buf = make_diverged('日本語ABC', 'XXXXABC')
 
       -- Insert 'Z' before 'A' in buffer (byte 9)
+      -- on_bytes: byte_offset=9, 9 > 7 → out of bounds
       vim.api.nvim_buf_set_text(buf, 0, 9, 0, 9, { 'Z' })
 
-      assert.are.equal(1, #doc._submitted_ops)
-      local ops = doc._submitted_ops[1]
-      -- byte_to_char('XXXXABC', 9) walks past 7-byte string → returns 7
-      -- Correct position for before 'A' in doc would be 4
-      assert.are.equal(7, ops[1].p) -- WRONG: clamped to end
-      assert.are_not.equal(4, ops[1].p) -- should be 4
+      -- Fix 1: boundary check triggers rejoin
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(0, #doc._submitted_ops)
 
       vim.api.nvim_buf_delete(buf, { force = true })
     end)
 
     -- ── Cascading divergence ────────────────────────────────────────
 
-    it('each edit compounds the divergence', function()
+    it('cascading divergence triggers rejoin on second edit (Fix 1)', function()
       -- Start: buffer has 1 extra prefix char
       -- Buffer: "XHello World" (12 bytes)
       -- doc:    "Hello World"  (11 bytes)
       local doc, buf = make_diverged('XHello World', 'Hello World')
 
       -- Edit 1: delete 'X' from buffer (byte 0, 1 byte)
+      -- on_bytes: byte_offset=0, old_end_byte=1, 0+1=1 <= 11 → passes check
       vim.api.nvim_buf_set_text(buf, 0, 0, 0, 1, { '' })
 
-      -- on_bytes: byte_offset=0, deleted text from doc = doc.content:sub(1,1) = "H"
-      -- WRONG: user deleted "X" but server sees delete of "H"
+      -- First edit still sends wrong op (boundary check passes for same-length)
       local ops1 = doc._submitted_ops[1]
-      assert.are.equal('H', ops1[1].d) -- WRONG text
-      -- doc.content = "ello World" (deleted 'H'), buffer = "Hello World"
+      assert.are.equal('H', ops1[1].d) -- WRONG: deletes 'H' instead of 'X'
+      -- doc.content = "ello World" (10 bytes), buffer = "Hello World" (11 bytes)
 
-      -- Edit 2: insert '!' at end of buffer
+      -- Edit 2: insert '!' at end of buffer (byte 11)
+      -- on_bytes: byte_offset=11, 11 > 10 → out of bounds
       vim.api.nvim_buf_set_text(buf, 0, 11, 0, 11, { '!' })
 
-      -- byte_to_char("ello World", 11) = 10 (clamped, only 10 bytes)
-      -- But correct position is 11 in "Hello World"
-      local ops2 = doc._submitted_ops[2]
-      assert.are.equal(10, ops2[1].p) -- WRONG position
-
-      -- doc.content = "ello World!", buffer = "Hello World!"
-      local buf_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-      assert.are_not.equal(buf_lines[1], doc.content)
+      -- Fix 1: second edit triggers rejoin, preventing further cascade
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(1, #doc._submitted_ops) -- only first edit submitted
 
       vim.api.nvim_buf_delete(buf, { force = true })
     end)
@@ -699,11 +880,11 @@ describe('buffer', function()
 
     -- ── End-to-end: Issue #5 → Issue #6 chain ──────────────────────
 
-    it('garbage from old undo-clear causes wrong ops on subsequent edits', function()
+    it('garbage from old undo-clear triggers rejoin (Fix 1)', function()
       -- Reproduce the full Issue #5 → Issue #6 chain:
       -- 1. Old undo-clear inserts garbage into buffer
       -- 2. on_bytes is attached (after the garbage, so it doesn't see it)
-      -- 3. User makes an edit → ops are wrong because doc.content ≠ buffer
+      -- 3. User makes an edit → Fix 1 detects byte_offset out of bounds
       local content = 'Hello World'
       local doc = make_doc(content)
 
@@ -724,20 +905,14 @@ describe('buffer', function()
       doc.bufnr = buf
       buffer.attach(buf, doc)
 
-      -- User types 'X' at position 1 in the buffer
-      -- The garbage shifts all byte offsets
+      -- User types 'X' at position past original content
+      -- byte_offset > #doc.content → Fix 1 triggers rejoin
       local garbage_len = #buf_content - #content
       vim.api.nvim_buf_set_text(buf, 0, 1 + garbage_len, 0, 1 + garbage_len, { 'X' })
 
-      -- The op is based on doc.content, not buffer
-      assert.are.equal(1, #doc._submitted_ops)
-
-      -- byte_offset from buffer includes garbage offset
-      -- byte_to_char maps this to wrong position in doc.content
-      -- The insert position is wrong compared to what the user intended
-      local buf_lines2 = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-      local buf_content2 = table.concat(buf_lines2, '\n')
-      assert.are_not.equal(buf_content2, doc.content) -- still diverged
+      -- Fix 1: boundary check detects divergence, triggers rejoin
+      assert.is_true(doc._rejoin_called)
+      assert.are.equal(0, #doc._submitted_ops) -- no wrong ops sent
 
       vim.api.nvim_buf_delete(buf, { force = true })
     end)

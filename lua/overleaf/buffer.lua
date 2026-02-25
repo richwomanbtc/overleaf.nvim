@@ -176,40 +176,64 @@ function M.attach(bufnr, doc)
       -- Guard: ignore if document not joined
       if not doc.joined then return end
 
-      local ops = {}
+      -- Validate byte_offset against doc.content (Fix 1)
+      if
+        byte_offset > #doc.content
+        or (old_end_byte > 0 and byte_offset + old_end_byte > #doc.content)
+      then
+        doc:rejoin()
+        config.log(
+          'warn',
+          'on_bytes: offset out of bounds (offset=%d, del=%d, doc=%d) — rejoin',
+          byte_offset,
+          old_end_byte,
+          #doc.content
+        )
+        return
+      end
 
-      -- Convert byte offset to character offset for Overleaf protocol
       local char_offset = ot.byte_to_char(doc.content, byte_offset)
 
-      -- Delete operation
+      -- Build ops atomically (Fix 2)
+      local delete_op, insert_op
+
       if old_end_byte > 0 then
         local deleted_text = doc.content:sub(byte_offset + 1, byte_offset + old_end_byte)
-        if #deleted_text > 0 then table.insert(ops, { p = char_offset, d = deleted_text }) end
+        if #deleted_text > 0 then delete_op = { p = char_offset, d = deleted_text } end
       end
 
-      -- Insert operation
       if new_end_byte > 0 then
-        -- Read inserted text from buffer
         local end_row = start_row + new_end_row
-        local end_col
-        if new_end_row == 0 then
-          end_col = start_col + new_end_col
-        else
-          end_col = new_end_col
-        end
-
-        local ok, new_lines = pcall(vim.api.nvim_buf_get_text, buf, start_row, start_col, end_row, end_col, {})
+        local end_col = new_end_row == 0 and start_col + new_end_col or new_end_col
+        local ok, new_lines =
+          pcall(vim.api.nvim_buf_get_text, buf, start_row, start_col, end_row, end_col, {})
         if ok and new_lines then
           local inserted_text = table.concat(new_lines, '\n')
-          if #inserted_text > 0 then table.insert(ops, { p = char_offset, i = inserted_text }) end
+          if #inserted_text > 0 then insert_op = { p = char_offset, i = inserted_text } end
         end
       end
 
+      -- Don't send partial ops for replace operations (Fix 2)
+      if new_end_byte > 0 and not insert_op and delete_op then
+        doc:rejoin()
+        config.log('warn', 'on_bytes: insert extraction failed for replace — rejoin')
+        return
+      end
+
+      local ops = {}
+      if delete_op then table.insert(ops, delete_op) end
+      if insert_op then table.insert(ops, insert_op) end
+
       if #ops > 0 then
-        -- Update content mirror
-        doc.content = ot.apply(doc.content, ops)
-        -- Submit to document for OT processing
-        doc:submit_op(ops)
+        -- pcall protection for ot.apply (Fix 3)
+        local ok, new_content = pcall(ot.apply, doc.content, ops)
+        if ok then
+          doc.content = new_content
+          doc:submit_op(ops)
+        else
+          doc:rejoin()
+          config.log('warn', 'on_bytes: ot.apply failed: %s — rejoin', tostring(new_content))
+        end
       end
     end,
   })

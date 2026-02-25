@@ -69,6 +69,21 @@ const crypto = require('crypto');
   };
 })();
 
+// Convert Unicode codepoint offset to UTF-16 code unit index.
+// JS strings are UTF-16; non-BMP characters (emoji etc.) use surrogate pairs
+// (2 code units per codepoint). Lua sends codepoint-based offsets, so we need
+// this conversion for correct String.slice() indexing. (Fix 4)
+function codepointToUtf16Offset(str, cpOffset) {
+  let utf16Idx = 0;
+  let cpCount = 0;
+  while (cpCount < cpOffset && utf16Idx < str.length) {
+    const code = str.charCodeAt(utf16Idx);
+    utf16Idx += (code >= 0xD800 && code <= 0xDBFF) ? 2 : 1;
+    cpCount++;
+  }
+  return utf16Idx;
+}
+
 class SocketManager {
   constructor(cookie, projectId, sendEvent) {
     this.cookie = cookie;
@@ -290,11 +305,15 @@ class SocketManager {
     if (content !== undefined && content !== null) {
       let newContent = content;
       for (const o of op) {
+        // o.p is a Unicode codepoint offset from Lua; convert to UTF-16
+        // index for JS String.slice() which uses UTF-16 code units (Fix 4)
+        const p = codepointToUtf16Offset(newContent, o.p);
         if (o.d) {
-          newContent = newContent.slice(0, o.p) + newContent.slice(o.p + o.d.length);
+          const dEnd = codepointToUtf16Offset(newContent, o.p + [...o.d].length);
+          newContent = newContent.slice(0, p) + newContent.slice(dEnd);
         }
         if (o.i) {
-          newContent = newContent.slice(0, o.p) + o.i + newContent.slice(o.p);
+          newContent = newContent.slice(0, p) + o.i + newContent.slice(p);
         }
       }
       // Use JS string length (character count) - matches Overleaf's sharejs
