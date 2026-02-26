@@ -134,8 +134,9 @@ const handlers = {
     }
 
     const dir = outputDir || require('os').tmpdir();
-    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || 'download'));
     const fs = require('fs');
+    fs.mkdirSync(dir, { recursive: true });
+    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || 'download'));
 
     await new Promise((resolve, reject) => {
       const parsed = new URL(url);
@@ -164,10 +165,11 @@ const handlers = {
 
     const url = `${BASE_URL}/project/${projectId}/file/${fileId}`;
     const dir = outputDir || require('os').tmpdir();
-    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || fileId));
 
     // Download binary file
     const fs = require('fs');
+    fs.mkdirSync(dir, { recursive: true });
+    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || fileId));
     await new Promise((resolve, reject) => {
       const parsed = new URL(url);
       const httpModule = parsed.protocol === 'http:' ? require('http') : require('https');
