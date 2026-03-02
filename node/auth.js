@@ -2,9 +2,27 @@
 
 const https = require('https');
 const http = require('http');
-const cheerio = require('cheerio');
 
 const BASE_URL = process.env.OVERLEAF_URL || 'https://www.overleaf.com';
+
+function normalizeCookie(cookie) {
+  const trimmed = (cookie || '').trim();
+
+  // Common user mistake: paste only the raw value from DevTools.
+  if (trimmed.startsWith('s%3A') || trimmed.startsWith('s:')) {
+    console.log('Cookie format: normalized (was missing name prefix)');
+    return {
+      cookie: 'overleaf_session2=' + trimmed,
+      normalized: true,
+    };
+  }
+
+  console.log('Cookie format: ok');
+  return {
+    cookie: trimmed,
+    normalized: false,
+  };
+}
 
 function httpGet(url, cookie) {
   return new Promise((resolve, reject) => {
@@ -38,17 +56,30 @@ function httpGet(url, cookie) {
   });
 }
 
-async function fetchProjectPage(cookie) {
-  const res = await httpGet(BASE_URL + '/project', cookie);
+async function fetchProjectPage(cookie, options = {}) {
+  const cookieSource = options.cookieSource || 'unknown';
+  const normalized = normalizeCookie(cookie);
+  const normalizedCookie = normalized.cookie;
+
+  const projectUrl = BASE_URL + '/project';
+  const res = await httpGet(projectUrl, normalizedCookie);
+  console.log(`Auth request: GET ${projectUrl} -> ${res.status}`);
 
   if (res.status === 302) {
-    throw { code: 'AUTH_FAILED', message: 'Cookie expired or invalid (redirected to login)' };
+    if (res.headers && res.headers.location) {
+      console.log(`Redirect location: ${res.headers.location}`);
+    }
+    throw {
+      code: 'AUTH_FAILED',
+      message: `Cookie rejected by Overleaf (HTTP 302 -> login page). Cookie source: ${cookieSource}. Run with log_level='debug' for details. If using .env, ensure format is: OVERLEAF_COOKIE=overleaf_session2=s%3A...`,
+    };
   }
 
   if (res.status !== 200) {
     throw { code: 'AUTH_FAILED', message: `Unexpected status: ${res.status}` };
   }
 
+  const cheerio = require('cheerio');
   const $ = cheerio.load(res.body);
 
   const csrfToken = $('meta[name="ol-csrfToken"]').attr('content');
@@ -96,7 +127,15 @@ async function fetchProjectPage(cookie) {
     }
   }
 
-  return { csrfToken, userId, userEmail, projects };
+  return {
+    csrfToken,
+    userId,
+    userEmail,
+    projects,
+    normalizedCookie,
+    cookieWasNormalized: normalized.normalized,
+    cookieSource,
+  };
 }
 
 /**
@@ -244,4 +283,12 @@ function httpPostMultipart(url, cookie, csrfToken, filePath, fileName) {
   });
 }
 
-module.exports = { fetchProjectPage, updateCookies, httpPost, httpGet, httpDelete, httpPostMultipart };
+module.exports = {
+  fetchProjectPage,
+  normalizeCookie,
+  updateCookies,
+  httpPost,
+  httpGet,
+  httpDelete,
+  httpPostMultipart,
+};

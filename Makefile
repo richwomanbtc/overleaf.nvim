@@ -13,7 +13,9 @@ test-lua: $(PLENARY_DIR)
 		-c "PlenaryBustedDirectory tests/ { minimal_init = 'tests/minimal_init.lua', sequential = true }"
 
 test-node:
+	cd node && npm install --silent 2>/dev/null
 	cd tests/node && npm install --silent 2>/dev/null
+	node tests/node/auth-cookie.test.js
 	node tests/node/integration.test.js
 
 lint:
