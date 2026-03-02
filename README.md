@@ -9,7 +9,7 @@ Edit your Overleaf projects directly in Neovim with full real-time collaboration
 - **Real-time collaboration** — edits sync instantly with other Overleaf users via OT
 - **Full Neovim ecosystem** — treesitter, LSP, snippets, copilot, and all your plugins work out of the box
 - **File tree** — browse and manage project files in a sidebar
-- **Auto-authentication** — extracts session cookie from Chrome automatically (macOS)
+- **Auto-authentication** — extracts session cookie from Chrome/Chromium automatically (macOS/Linux)
 - **Auto-reconnect** — recovers from disconnects and document restores seamlessly
 - **Compile & PDF preview** — compile LaTeX and open the PDF
 - **Comments & reviews** — view, reply, resolve comment threads
@@ -26,6 +26,7 @@ Edit your Overleaf projects directly in Neovim with full real-time collaboration
 - Node.js >= 18
 - An [Overleaf](https://www.overleaf.com) account
 - Chrome / Chromium (for automatic cookie extraction) or a session cookie
+- `sqlite3` CLI (required for automatic cookie extraction on Linux)
 
 ## Installation
 
@@ -64,29 +65,45 @@ cd ~/.local/share/nvim/lazy/overleaf.nvim/node && npm install
 
 ## Authentication
 
-### Option 1: Chrome (automatic)
+### Option 1: Chrome / Chromium (automatic on macOS/Linux)
 
-Just log in to [overleaf.com](https://www.overleaf.com) in Chrome. The plugin extracts the session cookie automatically. If you have multiple Chrome profiles, you'll be prompted to select one.
+Just log in to [overleaf.com](https://www.overleaf.com) in Chrome/Chromium. The plugin extracts the session cookie automatically. If you have multiple profiles, you'll be prompted to select one.
+
+On Linux, `sqlite3` is required for cookie extraction (pre-installed on most Ubuntu/Debian systems):
+
+```sh
+sudo apt install sqlite3
+```
+
+To enable GNOME Keyring support (needed for newer Chrome v11 encrypted cookies), also install `libsecret-tools`. Without it the plugin falls back to Chrome's default password, which works for most users:
+
+```sh
+sudo apt install libsecret-tools
+```
+
+If cookie extraction fails, set `log_level = 'debug'` for detailed diagnostics.
 
 ### Option 2: Manual cookie
 
 Create a `.env` file in your working directory:
 
 ```
-OVERLEAF_COOKIE=your_overleaf_session2_cookie_here
+OVERLEAF_COOKIE=overleaf_session2=s%3Ayour_cookie_value_here
 ```
 
 Or pass it directly in setup:
 
 ```lua
 require('overleaf').setup({
-  cookie = 'your_overleaf_session2_cookie_here',
+  cookie = 'overleaf_session2=s%3Ayour_cookie_value_here',
 })
 ```
 
 > **Warning:** If you use this method, make sure your Neovim config is not committed to a public dotfiles repository — the cookie would grant full access to your Overleaf account.
 
 To get the cookie manually: open overleaf.com in your browser → DevTools (F12) → Application → Cookies → `www.overleaf.com` → find `overleaf_session2` → copy the cookie value (starts with `overleaf_session2=s%3A...`).
+
+If you accidentally paste only the value (starting with `s%3A...`), the plugin auto-prepends `overleaf_session2=` and shows a warning.
 
 ## Usage
 
