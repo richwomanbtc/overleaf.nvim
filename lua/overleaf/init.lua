@@ -67,17 +67,26 @@ function M.connect()
     end
 
     -- Step 2: Get cookie (from config, .env, or Chrome)
-    M._get_cookie(function(cookie)
+    M._get_cookie(function(cookie, cookie_source)
       if not cookie then return end
 
       config.log('info', 'Authenticating...')
 
       -- Step 3: Authenticate and get project list
-      bridge.request('auth', { cookie = cookie }, function(auth_err, result)
+      bridge.request('auth', { cookie = cookie, cookieSource = cookie_source }, function(auth_err, result)
         if auth_err then
           config.log('error', 'Authentication failed: %s', auth_err.message)
           return
         end
+
+        local normalized_cookie = result.normalizedCookie or cookie
+        if result.cookieWasNormalized then
+          config.log('warn', 'Cookie value missing "overleaf_session2=" prefix, auto-prepending')
+        end
+        if result.cookieSource then
+          config.log('debug', 'Cookie source: %s', result.cookieSource)
+        end
+        config.get().cookie = normalized_cookie
 
         config.log('info', 'Authenticated as %s (%d projects)', result.userEmail or result.userId, #result.projects)
         M._state.csrf_token = result.csrfToken
@@ -85,7 +94,7 @@ function M.connect()
 
         -- Step 4: Select project
         project.select_project(
-          function(project_id, project_name) M._connect_project(cookie, project_id, project_name) end
+          function(project_id, project_name) M._connect_project(normalized_cookie, project_id, project_name) end
         )
       end)
     end)
@@ -110,7 +119,8 @@ function M._get_cookie(callback)
         if not cookie_err and cookie_result and cookie_result.cookie then
           config.log('info', 'Cookie extracted from Chrome')
           config.get().cookie = cookie_result.cookie
-          callback(cookie_result.cookie)
+          config.log('debug', 'Cookie source: chrome')
+          callback(cookie_result.cookie, 'chrome')
           return
         end
         config.log('debug', 'Chrome extraction failed: %s', cookie_err and cookie_err.message or 'unknown')
@@ -138,13 +148,21 @@ function M._get_cookie(callback)
 end
 
 function M._get_cookie_fallback(callback)
-  local cookie = config.load_cookie()
+  local cookie, meta = config.load_cookie({ return_metadata = true })
+  if meta and meta.checks then
+    for _, check in ipairs(meta.checks) do
+      config.log('debug', '.env path checked: %s (found: %s)', check.path, check.found and 'yes' or 'no')
+    end
+  end
+
   if cookie then
-    callback(cookie)
+    local source = meta and meta.source or 'config'
+    config.log('debug', 'Cookie source: %s', source)
+    callback(cookie, source)
     return
   end
   config.log('error', 'No cookie found. Log in to overleaf.com in Chrome, or set OVERLEAF_COOKIE in .env')
-  callback(nil)
+  callback(nil, nil)
 end
 
 function M._connect_project(cookie, project_id, project_name)

@@ -20,39 +20,81 @@ end
 
 function M.get() return M._config end
 
-function M.load_cookie()
-  if M._config.cookie then return M._config.cookie end
+local function cookie_preview(cookie)
+  if not cookie or cookie == '' then return '<empty>' end
 
-  local env_file = M._config.env_file
-  local paths
-
-  if env_file:sub(1, 1) == '/' then
-    -- Absolute path: use directly
-    paths = { env_file }
-  else
-    -- Relative path: try cwd, then plugin root
-    paths = {
-      vim.fn.getcwd() .. '/' .. env_file,
-      M.plugin_root() .. '/' .. env_file,
-    }
+  local key, value = cookie:match('^([^=]+)=(.+)$')
+  if key and value then
+    if #value <= 12 then return key .. '=' .. value end
+    return string.format('%s=%s...%s...', key, value:sub(1, 4), value:sub(5, 12))
   end
 
+  if #cookie <= 16 then return cookie end
+  return cookie:sub(1, 16) .. '...'
+end
+
+local function resolve_cookie_paths(env_file)
+  if env_file:sub(1, 1) == '/' then
+    -- Absolute path: use directly
+    return { env_file }
+  end
+
+  -- Relative path: try cwd, then plugin root
+  return {
+    vim.fn.getcwd() .. '/' .. env_file,
+    M.plugin_root() .. '/' .. env_file,
+  }
+end
+
+function M.load_cookie(opts)
+  opts = opts or {}
+  local checks = {}
+
+  local function finish(cookie, source, path)
+    local meta = {
+      source = source,
+      path = path,
+      checks = checks,
+    }
+    if opts.return_metadata then
+      return cookie, meta
+    end
+    return cookie
+  end
+
+  if M._config.cookie then
+    return finish(M._config.cookie, 'config', nil)
+  end
+
+  local env_file = M._config.env_file
+  local paths = resolve_cookie_paths(env_file)
+
   for _, path in ipairs(paths) do
+    local found = false
+    local cookie = nil
     local f = io.open(path, 'r')
     if f then
       for line in f:lines() do
         local key, value = line:match('^([^=]+)=(.+)$')
         if key == 'OVERLEAF_COOKIE' then
-          M._config.cookie = value
-          f:close()
-          return value
+          cookie = value
+          found = true
+          break
         end
       end
       f:close()
     end
+
+    table.insert(checks, { path = path, found = found })
+
+    if found then
+      M._config.cookie = cookie
+      M.log('debug', 'Loaded cookie from %s: %s', path, cookie_preview(cookie))
+      return finish(cookie, 'env-file', path)
+    end
   end
 
-  return nil
+  return finish(nil, nil, nil)
 end
 
 function M.plugin_root()

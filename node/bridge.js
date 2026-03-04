@@ -49,9 +49,9 @@ const handlers = {
   },
 
   async auth(params) {
-    const { cookie } = params;
+    const { cookie, cookieSource } = params;
     if (!cookie) throw { code: 'MISSING_PARAM', message: 'cookie is required' };
-    return await auth.fetchProjectPage(cookie);
+    return await auth.fetchProjectPage(cookie, { cookieSource });
   },
 
   async connect(params) {
