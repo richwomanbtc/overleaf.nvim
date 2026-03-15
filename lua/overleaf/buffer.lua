@@ -37,6 +37,8 @@ function M.create(doc, lines)
     callback = function()
       vim.bo[bufnr].modified = false
       require('overleaf').compile()
+      -- Trigger BufWritePost so user autocmds (e.g. local latexmk) can fire
+      vim.api.nvim_exec_autocmds('BufWritePost', { buffer = bufnr })
     end,
   })
 

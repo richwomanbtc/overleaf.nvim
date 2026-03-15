@@ -188,6 +188,11 @@ function M._connect_project(cookie, project_id, project_name)
     sync.start(project_name)
     sync.sync_all(M._state, project._project_tree)
 
+    -- Change cwd to sync directory (enables texlab, Claude Code, etc.)
+    if sync._sync_dir then
+      vim.cmd.cd(sync._sync_dir)
+    end
+
     -- Show tree immediately
     vim.schedule(function() require('overleaf.tree').toggle() end)
   end)

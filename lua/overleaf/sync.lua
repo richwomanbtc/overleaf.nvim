@@ -19,8 +19,8 @@ function M.start(project_name)
   -- Expand ~ and resolve
   sync_dir = vim.fn.expand(sync_dir)
 
-  -- Use project subdirectory
-  M._sync_dir = sync_dir .. '/' .. project_name:gsub('[^%w%-_%.%s]', '_')
+  -- Sanitize: only replace filesystem-unsafe characters (/ \ : * ? " < > |)
+  M._sync_dir = sync_dir .. '/' .. project_name:gsub('[/%\\:%*%?"<>|]', '_')
   vim.fn.mkdir(M._sync_dir, 'p')
 
   config.log('info', 'File sync: %s', M._sync_dir)
@@ -131,12 +131,20 @@ function M.watch(doc)
 
   M._watchers[path] = { handle = handle, doc_id = doc.doc_id }
 
-  handle:start(path, {}, function(err, _, _)
+  local callback
+  callback = function(err, _, _)
+    -- Re-start watcher (fs_event can stop after first event on some platforms)
+    if handle and not handle:is_closing() then
+      handle:stop()
+      handle:start(path, {}, callback)
+    end
+
     if err then return end
     if M._writing[path] then return end
 
     vim.schedule(function() M._on_file_changed(path, doc) end)
-  end)
+  end
+  handle:start(path, {}, callback)
 end
 
 --- Stop watching a specific document's file
@@ -170,9 +178,27 @@ function M._on_file_changed(path, doc)
   config.log('info', 'External change: %s', doc.path)
 
   if doc.joined and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-    -- Doc is open in Neovim: replace buffer content (triggers on_bytes → OT)
+    -- Doc is open in Neovim: update buffer then send OT ops
+    local old_content = doc.content
+    if new_content == old_content then return end
+
+    -- Update buffer first (without triggering on_bytes)
+    M._writing[doc.path] = true
     local lines = vim.split(new_content, '\n', { plain = true })
+    doc.applying_remote = true
     vim.api.nvim_buf_set_lines(doc.bufnr, 0, -1, false, lines)
+    doc.applying_remote = false
+    vim.defer_fn(function() M._writing[doc.path] = nil end, 300)
+
+    -- Build OT ops and update doc state
+    local ops = {}
+    if #old_content > 0 then table.insert(ops, { p = 0, d = old_content }) end
+    if #new_content > 0 then table.insert(ops, { p = 0, i = new_content }) end
+
+    doc.content = new_content
+
+    -- Submit OT ops (check_content will now see matching buffer and doc.content)
+    doc:submit_op(ops)
   else
     -- Doc is NOT open: join, send OT ops directly, leave
     M._sync_closed_doc(doc, new_content)
@@ -312,16 +338,17 @@ function M.sync_all(state, project_tree, callback)
 
   config.log('info', 'Syncing %d document(s) to disk...', #docs)
 
-  local remaining = #docs
-  local function on_done()
-    remaining = remaining - 1
-    if remaining <= 0 then
+  -- Sync docs sequentially to avoid joinLeaveEpoch mismatch
+  local i = 0
+  local function sync_next()
+    i = i + 1
+    if i > #docs then
       config.log('info', 'Sync complete: %s', M._sync_dir)
       if callback then callback() end
+      return
     end
-  end
 
-  for _, entry in ipairs(docs) do
+    local entry = docs[i]
     local doc_id = entry.id
     local doc_path = entry.path
 
@@ -331,13 +358,13 @@ function M.sync_all(state, project_tree, callback)
       -- Already joined, just write
       M.write_doc(existing)
       M.watch(existing)
-      on_done()
+      sync_next()
     else
       -- Need to join, write, leave
       bridge.request('joinDoc', { docId = doc_id }, function(err, result)
         if err then
           config.log('debug', 'Sync skip %s: %s', doc_path, err.message)
-          on_done()
+          sync_next()
           return
         end
 
@@ -361,13 +388,15 @@ function M.sync_all(state, project_tree, callback)
         -- Leave if no buffer (not opened by user)
         if not doc.bufnr then
           doc.joined = false
-          bridge.request('leaveDoc', { docId = doc_id }, function() on_done() end)
+          bridge.request('leaveDoc', { docId = doc_id }, function() sync_next() end)
         else
-          on_done()
+          sync_next()
         end
       end)
     end
   end
+
+  sync_next()
 end
 
 --- Re-sync: read all disk files and push changes to Overleaf
