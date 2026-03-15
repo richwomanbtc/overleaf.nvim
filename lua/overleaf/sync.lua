@@ -131,12 +131,20 @@ function M.watch(doc)
 
   M._watchers[path] = { handle = handle, doc_id = doc.doc_id }
 
-  handle:start(path, {}, function(err, _, _)
+  local callback
+  callback = function(err, _, _)
+    -- Re-start watcher (fs_event can stop after first event on some platforms)
+    if handle and not handle:is_closing() then
+      handle:stop()
+      handle:start(path, {}, callback)
+    end
+
     if err then return end
     if M._writing[path] then return end
 
     vim.schedule(function() M._on_file_changed(path, doc) end)
-  end)
+  end
+  handle:start(path, {}, callback)
 end
 
 --- Stop watching a specific document's file
@@ -170,9 +178,27 @@ function M._on_file_changed(path, doc)
   config.log('info', 'External change: %s', doc.path)
 
   if doc.joined and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-    -- Doc is open in Neovim: replace buffer content (triggers on_bytes → OT)
+    -- Doc is open in Neovim: update buffer then send OT ops
+    local old_content = doc.content
+    if new_content == old_content then return end
+
+    -- Update buffer first (without triggering on_bytes)
+    M._writing[doc.path] = true
     local lines = vim.split(new_content, '\n', { plain = true })
+    doc.applying_remote = true
     vim.api.nvim_buf_set_lines(doc.bufnr, 0, -1, false, lines)
+    doc.applying_remote = false
+    vim.defer_fn(function() M._writing[doc.path] = nil end, 300)
+
+    -- Build OT ops and update doc state
+    local ops = {}
+    if #old_content > 0 then table.insert(ops, { p = 0, d = old_content }) end
+    if #new_content > 0 then table.insert(ops, { p = 0, i = new_content }) end
+
+    doc.content = new_content
+
+    -- Submit OT ops (check_content will now see matching buffer and doc.content)
+    doc:submit_op(ops)
   else
     -- Doc is NOT open: join, send OT ops directly, leave
     M._sync_closed_doc(doc, new_content)
