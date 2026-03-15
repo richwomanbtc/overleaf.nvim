@@ -36,7 +36,7 @@ function M.grep(pattern, state)
       local qf_items = {}
       for _, r in ipairs(results) do
         table.insert(qf_items, {
-          filename = 'overleaf://' .. r.path,
+          filename = require('overleaf.sync').buf_name(r.path),
           lnum = r.lnum,
           col = r.col,
           text = r.text,

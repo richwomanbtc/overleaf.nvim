@@ -3,6 +3,7 @@ local bridge = require('overleaf.bridge')
 local project = require('overleaf.project')
 local Document = require('overleaf.document')
 local buffer = require('overleaf.buffer')
+local sync = require('overleaf.sync')
 
 local M = {}
 
@@ -183,6 +184,10 @@ function M._connect_project(cookie, project_id, project_name)
     -- Load comment threads
     require('overleaf.comments').load_threads(project_id)
 
+    -- Start file sync (if sync_dir configured)
+    sync.start(project_name)
+    sync.sync_all(M._state, project._project_tree)
+
     -- Show tree immediately
     vim.schedule(function() require('overleaf.tree').toggle() end)
   end)
@@ -195,7 +200,12 @@ function M._setup_event_handlers()
     if not data.op then return end
 
     local doc = M._state.documents[data.doc]
-    if doc then doc:on_remote_op(data, function(transformed_ops) buffer.apply_remote(doc, transformed_ops) end) end
+    if doc then
+      doc:on_remote_op(data, function(transformed_ops)
+        buffer.apply_remote(doc, transformed_ops)
+        sync.schedule_write(doc)
+      end)
+    end
   end)
 
   bridge.on_event('otUpdateError', function(data)
@@ -541,6 +551,10 @@ function M.open_document(doc_id_or_path, doc_path)
 
     buffer.create(doc, lines)
 
+    -- Write to sync dir and start watching for external changes
+    sync.write_doc(doc)
+    sync.watch(doc)
+
     -- Parse and render comments if ranges contain comments
     if ranges then
       local comments = require('overleaf.comments')
@@ -851,7 +865,7 @@ function M.rename_entity()
             local doc = M._state.documents[choice.id]
             if doc and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
               doc.path = updated.path
-              vim.api.nvim_buf_set_name(doc.bufnr, 'overleaf://' .. updated.path)
+              vim.api.nvim_buf_set_name(doc.bufnr, sync.buf_name(updated.path))
             end
           end
           if updated then config.log('info', 'Renamed to: %s', updated.path) end
@@ -1362,6 +1376,30 @@ function M.resolve_comment()
   end
 end
 
+function M.sync_all()
+  if not M._state.connected then
+    config.log('warn', 'Not connected.')
+    return
+  end
+  sync.sync_all(M._state, project._project_tree)
+end
+
+function M.sync_import()
+  if not M._state.connected then
+    config.log('warn', 'Not connected.')
+    return
+  end
+  sync.import_all(M._state)
+end
+
+function M.sync_export()
+  if not M._state.connected then
+    config.log('warn', 'Not connected.')
+    return
+  end
+  sync.export_all(M._state)
+end
+
 function M.disconnect()
   -- Stop auto-reconnect
   M._reconnect.attempt = 0
@@ -1371,6 +1409,9 @@ function M.disconnect()
     M._reconnect.timer = nil
   end
   bridge._on_unexpected_exit = nil
+
+  -- Stop file sync watchers
+  sync.stop()
 
   -- Clear collaborator cursors and comments
   pcall(function() require('overleaf.cursors').clear_all() end)
@@ -1427,10 +1468,8 @@ function M.statusline()
 
   -- Show current doc name if in an overleaf buffer
   local bufname = vim.api.nvim_buf_get_name(0)
-  if bufname:match('^overleaf://') then
-    local doc_path = bufname:gsub('^overleaf://', '')
-    return 'OL: ' .. proj .. ' / ' .. doc_path
-  end
+  local doc_path = sync.parse_buf_name(bufname)
+  if doc_path then return 'OL: ' .. proj .. ' / ' .. doc_path end
 
   return 'OL: ' .. proj
 end

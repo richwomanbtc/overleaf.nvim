@@ -274,7 +274,7 @@ function M.list_all(_project_id)
         local msg = ''
         if thread.messages and #thread.messages > 0 then msg = (thread.messages[1].content or ''):gsub('\n', ' ') end
         table.insert(qf_items, {
-          filename = 'overleaf://' .. doc_path,
+          filename = require('overleaf.sync').buf_name(doc_path),
           lnum = 1, -- approximate, would need content to compute
           text = msg,
         })

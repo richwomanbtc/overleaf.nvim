@@ -240,7 +240,7 @@ function M._rename_entry()
             local doc = ol._state.documents[entry.id]
             if doc and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
               doc.path = updated.path
-              vim.api.nvim_buf_set_name(doc.bufnr, 'overleaf://' .. updated.path)
+              vim.api.nvim_buf_set_name(doc.bufnr, require('overleaf.sync').buf_name(updated.path))
             end
           end
           config.log('info', 'Renamed to: %s', updated.path)
