@@ -312,16 +312,17 @@ function M.sync_all(state, project_tree, callback)
 
   config.log('info', 'Syncing %d document(s) to disk...', #docs)
 
-  local remaining = #docs
-  local function on_done()
-    remaining = remaining - 1
-    if remaining <= 0 then
+  -- Sync docs sequentially to avoid joinLeaveEpoch mismatch
+  local i = 0
+  local function sync_next()
+    i = i + 1
+    if i > #docs then
       config.log('info', 'Sync complete: %s', M._sync_dir)
       if callback then callback() end
+      return
     end
-  end
 
-  for _, entry in ipairs(docs) do
+    local entry = docs[i]
     local doc_id = entry.id
     local doc_path = entry.path
 
@@ -331,13 +332,13 @@ function M.sync_all(state, project_tree, callback)
       -- Already joined, just write
       M.write_doc(existing)
       M.watch(existing)
-      on_done()
+      sync_next()
     else
       -- Need to join, write, leave
       bridge.request('joinDoc', { docId = doc_id }, function(err, result)
         if err then
           config.log('debug', 'Sync skip %s: %s', doc_path, err.message)
-          on_done()
+          sync_next()
           return
         end
 
@@ -361,13 +362,15 @@ function M.sync_all(state, project_tree, callback)
         -- Leave if no buffer (not opened by user)
         if not doc.bufnr then
           doc.joined = false
-          bridge.request('leaveDoc', { docId = doc_id }, function() on_done() end)
+          bridge.request('leaveDoc', { docId = doc_id }, function() sync_next() end)
         else
-          on_done()
+          sync_next()
         end
       end)
     end
   end
+
+  sync_next()
 end
 
 --- Re-sync: read all disk files and push changes to Overleaf

@@ -80,6 +80,13 @@ function M.log(level, msg, ...)
 
     local formatted = string.format(msg, ...)
     vim.notify('[overleaf] ' .. formatted, vim_level)
+
+    -- Also log to file
+    local f = io.open(vim.fn.expand('~/.local/state/nvim/overleaf.log'), 'a')
+    if f then
+      f:write(os.date('%Y-%m-%d %H:%M:%S') .. ' [' .. level .. '] ' .. formatted .. '\n')
+      f:close()
+    end
   end
 end
 
