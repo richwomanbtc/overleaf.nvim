@@ -19,8 +19,8 @@ function M.start(project_name)
   -- Expand ~ and resolve
   sync_dir = vim.fn.expand(sync_dir)
 
-  -- Use project subdirectory
-  M._sync_dir = sync_dir .. '/' .. project_name:gsub('[^%w%-_%.%s]', '_')
+  -- Sanitize: only replace filesystem-unsafe characters (/ \ : * ? " < > |)
+  M._sync_dir = sync_dir .. '/' .. project_name:gsub('[/%\\:%*%?"<>|]', '_')
   vim.fn.mkdir(M._sync_dir, 'p')
 
   config.log('info', 'File sync: %s', M._sync_dir)
