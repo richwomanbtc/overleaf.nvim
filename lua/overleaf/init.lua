@@ -12,8 +12,8 @@ local M = {}
 local function open_file(file_path)
   local viewer = config.get().pdf_viewer
   if viewer then
-    -- User-configured viewer: open in terminal split (supports TUI viewers like tdf)
-    vim.cmd('split | terminal ' .. vim.fn.shellescape(viewer) .. ' ' .. vim.fn.shellescape(file_path))
+    -- User-configured viewer: run as background job to avoid disrupting cursor/window layout
+    vim.fn.jobstart({ viewer, file_path }, { detach = true })
   else
     -- Auto-detect platform launcher (runs in background)
     local cmd
