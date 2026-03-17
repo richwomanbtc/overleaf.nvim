@@ -22,6 +22,15 @@ local subcommands = {
     end
   end,
   history = function() require('overleaf').history() end,
+  sync = function(args)
+    if args == 'import' then
+      require('overleaf').sync_import()
+    elseif args == 'export' then
+      require('overleaf').sync_export()
+    else
+      require('overleaf').sync_all()
+    end
+  end,
 }
 
 vim.api.nvim_create_user_command('Overleaf', function(opts)
@@ -66,6 +75,7 @@ end, {
     -- Complete subcommand arguments
     local sub = parts[2]
     if sub == 'comments' then return { 'refresh' } end
+    if sub == 'sync' then return { 'import', 'export' } end
     return {}
   end,
 })

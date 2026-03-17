@@ -19,6 +19,7 @@ Edit your Overleaf projects directly in Neovim with full real-time collaboration
 - **History** — view project version history
 - **Diagnostics** — chktex linter + LaTeX compile errors via `vim.diagnostic`
 - **LSP support** — auto-attaches texlab, ltex, harper_ls to overleaf buffers
+- **Local file sync** — mirror documents to disk for external tools (Claude Code, etc.)
 
 ## Requirements
 
@@ -112,6 +113,9 @@ To get the cookie manually: open overleaf.com in your browser → DevTools (F12)
 | `:Overleaf comments` | List all comments |
 | `:Overleaf comments refresh` | Refresh comments from server |
 | `:Overleaf history` | View project history |
+| `:Overleaf sync` | Sync all documents to/from disk |
+| `:Overleaf sync import` | Import external changes from disk to Overleaf |
+| `:Overleaf sync export` | Export all documents to disk |
 
 ### Default Keymaps
 
@@ -157,6 +161,10 @@ require('overleaf').setup({
   -- Log level: 'debug', 'info', 'warn', 'error' (default: 'info')
   log_level = 'info',
 
+  -- Local file sync directory for external tools like Claude Code (default: nil = disabled)
+  -- When set, all documents are mirrored to disk and external changes are synced back.
+  sync_dir = '~/.overleaf',
+
   -- Set to false to disable default keymaps
   keys = true,
 })
@@ -169,6 +177,45 @@ require('overleaf').setup({
 3. Edit normally — changes sync to Overleaf in real-time
 4. `:w` — triggers compile and opens PDF
 5. `:Overleaf tree` — switch between documents
+
+## External Tool Integration (Claude Code, etc.)
+
+By default, Overleaf documents exist only as virtual buffers — they have no files on disk. This means external tools like Claude Code cannot read or edit them.
+
+Set `sync_dir` to enable local file mirroring:
+
+```lua
+require('overleaf').setup({
+  sync_dir = '~/.overleaf',  -- or any directory
+})
+```
+
+When connected to a project, all text documents are synced to `~/.overleaf/<project-name>/`. External tools can read and edit these files — changes are automatically detected and synced back to Overleaf.
+
+### How it works
+
+- **On connect**: all documents are fetched and written to disk
+- **Neovim edits**: debounced writes keep disk files up to date
+- **Remote edits**: disk files are updated when collaborators make changes
+- **External edits**: file watchers detect changes and sync them to Overleaf via OT
+  - For open documents: buffer is updated, triggering the normal OT pipeline
+  - For closed documents: changes are sent directly via the bridge
+
+### Commands
+
+- `:Overleaf sync` — re-sync all documents (fetch from Overleaf and write to disk)
+- `:Overleaf sync import` — import all external disk changes to Overleaf
+- `:Overleaf sync export` — export all documents to disk
+
+### Usage with Claude Code
+
+```bash
+# Start Claude Code in the sync directory
+cd ~/.overleaf/My\ Project
+claude
+```
+
+Claude Code can now read all your LaTeX files and make edits that sync back to Overleaf in real-time.
 
 ## How It Works
 

@@ -9,7 +9,7 @@ local M = {}
 ---@return number bufnr
 function M.create(doc, lines)
   local bufnr = vim.api.nvim_create_buf(true, false)
-  vim.api.nvim_buf_set_name(bufnr, 'overleaf://' .. doc.path)
+  vim.api.nvim_buf_set_name(bufnr, require('overleaf.sync').buf_name(doc.path))
 
   -- Buffer options first
   vim.bo[bufnr].buftype = 'acwrite'
@@ -210,6 +210,8 @@ function M.attach(bufnr, doc)
         doc.content = ot.apply(doc.content, ops)
         -- Submit to document for OT processing
         doc:submit_op(ops)
+        -- Sync to disk for external tools
+        require('overleaf.sync').schedule_write(doc)
       end
     end,
   })
