@@ -157,10 +157,24 @@ function Document:rejoin(attempt)
       self._rejoining = false
       local content = table.concat(result.lines, '\n')
       self.version = result.version
+      self.ranges = result.ranges
+
+      -- Guard: do not overwrite buffer with empty content when buffer has data
+      if #content == 0 and self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
+        local current_lines = vim.api.nvim_buf_get_lines(self.bufnr, 0, -1, false)
+        local current_content = table.concat(current_lines, '\n')
+        if #current_content > 0 then
+          config.log('warn', 'Rejoin returned empty content for %s — keeping buffer (%d bytes)', self.path, #current_content)
+          self.content = current_content
+          self.server_content = current_content
+          self.joined = true
+          return
+        end
+      end
+
       self.content = content
       self.server_content = content
       self.joined = true
-      self.ranges = result.ranges
 
       config.log('info', 'Rejoined doc %s (v%d)', self.path, self.version)
 

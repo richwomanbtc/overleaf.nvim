@@ -87,10 +87,13 @@ function M.write_doc(doc)
   -- Set writing flag to suppress watcher
   M._writing[path] = true
 
-  local f = io.open(path, 'w')
+  -- Atomic write: temp file + rename to prevent partial reads from fs_event race
+  local tmp_path = path .. '.tmp.' .. vim.uv.getpid()
+  local f = io.open(tmp_path, 'w')
   if f then
     f:write(doc.content)
     f:close()
+    os.rename(tmp_path, path)
   end
 
   -- Clear writing flag after watcher event has passed
@@ -167,10 +170,17 @@ function M._on_file_changed(path, doc)
   -- No change
   if new_content == doc.content then return end
 
+  -- Guard: reject empty content when document has existing data.
+  -- Prevents truncated file reads (race with external writes) from wiping the buffer.
+  if #new_content == 0 and doc.content and #doc.content > 0 then
+    config.log('debug', 'Ignoring empty file read for %s (doc has %d bytes)', doc.path, #doc.content)
+    return
+  end
+
   config.log('info', 'External change: %s', doc.path)
 
   if doc.joined and doc.bufnr and vim.api.nvim_buf_is_valid(doc.bufnr) then
-    -- Doc is open in Neovim: replace buffer content (triggers on_bytes → OT)
+    -- Doc is open in Neovim: replace buffer content (triggers on_bytes → OT → server)
     local lines = vim.split(new_content, '\n', { plain = true })
     vim.api.nvim_buf_set_lines(doc.bufnr, 0, -1, false, lines)
   else
