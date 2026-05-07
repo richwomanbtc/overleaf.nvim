@@ -71,10 +71,18 @@ Just log in to [overleaf.com](https://www.overleaf.com) in Chrome. The plugin ex
 
 ### Option 2: Manual cookie
 
-Create a `.env` file in your working directory:
+Create a `.env` file storing your cookie:
 
 ```
 OVERLEAF_COOKIE=your_overleaf_session2_cookie_here
+```
+
+Place it in your working directory or specify the path via
+
+```lua
+require('overleaf').setup({
+  env_file = 'the_path_here',
+})
 ```
 
 Or pass it directly in setup:
