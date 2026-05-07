@@ -30,6 +30,9 @@ function M.load_cookie()
   if env_file:sub(1, 1) == '/' then
     -- Absolute path: use directly
     paths = { env_file }
+  elseif env_file:sub(1, 1) == '~' or env_file:sub(1, 5) == '$HOME' then
+    -- Relative path to $HOME
+    paths = { vim.fn.expand(env_file) }
   else
     -- Relative path: try cwd, then plugin root
     paths = {
