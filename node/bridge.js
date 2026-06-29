@@ -114,9 +114,26 @@ const handlers = {
     }
 
     const parsed = JSON.parse(compileRes.body);
+    const outputFiles = parsed.outputFiles || [];
+    const clsiServerId = parsed.clsiServerId || parsed.clsiServerID || parsed.clsiServer;
+    const compileGroup = parsed.compileGroup || 'standard';
+
+    if (clsiServerId) {
+      for (const outputFile of outputFiles) {
+        if (!outputFile.url) continue;
+        const outputUrl = new URL(outputFile.url, BASE_URL);
+        if (!outputUrl.searchParams.has('compileGroup')) {
+          outputUrl.searchParams.set('compileGroup', compileGroup);
+        }
+        if (!outputUrl.searchParams.has('clsiserverid')) {
+          outputUrl.searchParams.set('clsiserverid', clsiServerId);
+        }
+        outputFile.url = outputUrl.pathname + outputUrl.search;
+      }
+    }
 
     // Download log if available
-    const logFile = (parsed.outputFiles || []).find(f => f.path === 'output.log');
+    const logFile = outputFiles.find(f => f.path === 'output.log');
     let log = '';
     if (logFile) {
       const logUrl = `${BASE_URL}${logFile.url}`;
@@ -124,7 +141,7 @@ const handlers = {
       log = logRes.body;
     }
 
-    return { status: parsed.status, outputFiles: parsed.outputFiles || [], log };
+    return { status: parsed.status, outputFiles, log };
   },
 
   async downloadUrl(params) {
@@ -135,11 +152,12 @@ const handlers = {
 
     const dir = outputDir || require('os').tmpdir();
     const fs = require('fs');
+    const path = require('path');
     fs.mkdirSync(dir, { recursive: true });
-    const tmpPath = require('path').join(dir, 'overleaf_' + (fileName || 'download'));
+    const tmpPath = path.join(dir, 'overleaf_' + (fileName || 'download'));
 
-    await new Promise((resolve, reject) => {
-      const parsed = new URL(url);
+    const download = (downloadUrl, redirectsLeft) => new Promise((resolve, reject) => {
+      const parsed = new URL(downloadUrl);
       const httpModule = parsed.protocol === 'http:' ? require('http') : require('https');
       httpModule.get({
         hostname: parsed.hostname,
@@ -147,12 +165,57 @@ const handlers = {
         path: parsed.pathname + parsed.search,
         headers: { 'Cookie': cookie },
       }, (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          res.resume();
+          if (redirectsLeft <= 0) {
+            reject(new Error('Too many redirects while downloading PDF'));
+            return;
+          }
+          resolve(download(new URL(res.headers.location, downloadUrl).toString(), redirectsLeft - 1));
+          return;
+        }
+
+        if (res.statusCode === 404 && parsed.pathname.startsWith('/download/project/')) {
+          const withoutUser = parsed.pathname.replace(
+            /^\/download\/project\/([^/]+)\/user\/[^/]+\/build\//,
+            '/download/project/$1/build/'
+          );
+          if (withoutUser !== parsed.pathname) {
+            res.resume();
+            resolve(download(new URL(withoutUser + parsed.search, downloadUrl).toString(), redirectsLeft));
+            return;
+          }
+        }
+
+        if (res.statusCode === 404 && parsed.pathname.startsWith('/project/') && !parsed.pathname.startsWith('/download/')) {
+          res.resume();
+          const downloadPath = '/download' + parsed.pathname;
+          const downloadSearch = parsed.search
+            ? parsed.search + '&popupDownload=true'
+            : '?popupDownload=true';
+          resolve(download(new URL(downloadPath + downloadSearch, downloadUrl).toString(), redirectsLeft));
+          return;
+        }
+
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          res.resume();
+          reject(new Error(`PDF download failed with status ${res.statusCode} for ${parsed.pathname}${parsed.search}`));
+          return;
+        }
+
         const ws = fs.createWriteStream(tmpPath);
         res.pipe(ws);
         ws.on('finish', () => { ws.close(); resolve(); });
         ws.on('error', reject);
       }).on('error', reject);
     });
+
+    await download(url, 5);
+
+    const size = fs.statSync(tmpPath).size;
+    if (size === 0) {
+      throw { code: 'EMPTY_DOWNLOAD', message: 'Downloaded PDF is empty' };
+    }
 
     return { path: tmpPath };
   },
